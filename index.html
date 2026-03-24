@@ -1,0 +1,2938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>NAS100 AI Trading Dashboard</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0b0f1a;--panel:#111827;--card:#1a2235;--border:#1e2d45;
+      --text:#e2e8f0;--muted:#64748b;
+      --g:#22c55e;--r:#ef4444;--y:#f59e0b;--b:#3b82f6;--p:#a855f7;--c:#06b6d4;
+    }
+    html,body{background:var(--bg);color:var(--text);font-family:Consolas,'SF Mono',monospace;font-size:12px;min-height:100vh}
+    /* ── Top bar ── */
+    #topbar{
+      position:sticky;top:0;z-index:100;
+      background:var(--panel);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:16px;padding:0 16px;height:50px;
+    }
+    /* ── Layout ── */
+    #layout{display:flex;gap:8px;padding:8px;min-height:calc(100vh - 50px)}
+    #left{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+    #right{width:300px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+    /* ── Cards ── */
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .lbl{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+    /* ── Badges ── */
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.04em}
+    .bg{background:#052e16;color:var(--g);border:1px solid #22c55e25}
+    .br{background:#2d0707;color:var(--r);border:1px solid #ef444425}
+    .by{background:#2d1f04;color:var(--y);border:1px solid #f59e0b25}
+    .bb{background:#0c1a3a;color:var(--b);border:1px solid #3b82f625}
+    .bp{background:#1a0c2e;color:var(--p);border:1px solid #a855f725}
+    .bx{background:var(--card);color:var(--muted);border:1px solid var(--border)}
+    /* ── Gauge ── */
+    .gauge{height:4px;background:var(--card);border-radius:2px;margin-top:5px}
+    .gauge-f{height:100%;border-radius:2px;transition:width .5s}
+    /* ── Tabs ── */
+    .tabs{display:flex;gap:4px;margin-bottom:10px}
+    .tab{padding:4px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;transition:.1s}
+    .tab.on{background:var(--card);color:var(--text)}
+    .tab.off{color:var(--muted)}.tab.off:hover{color:var(--text)}
+    /* ── Scrollbar ── */
+    .scr{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--card) transparent}
+    .scr::-webkit-scrollbar{width:3px}.scr::-webkit-scrollbar-thumb{background:var(--card)}
+    /* ── Chart wrapper — fixed height, NO overlay ── */
+    #chart-box{position:relative;height:500px;background:var(--panel);border-radius:8px;overflow:hidden}
+    #chart{width:100%;height:500px}
+    /* ── Chart status message — small text below chart, NOT an overlay ── */
+    #chart-msg{font-size:10px;color:var(--muted);text-align:center;padding:3px 0;min-height:16px}
+    /* ── Indicator pill buttons ── */
+    .ind-pill{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid;transition:.15s;letter-spacing:.03em}
+    .ind-pill.on{opacity:1}.ind-pill.off{opacity:.3;filter:grayscale(.5)}
+    /* ── Signal distance bar ── */
+    .dist-bar{height:4px;border-radius:2px;background:var(--card);margin:5px 0}
+    .dist-fill{height:100%;border-radius:2px;transition:width .5s}
+    /* ── Alert flash ── */
+    @keyframes alert-flash{0%,100%{box-shadow:none}50%{box-shadow:0 0 12px 2px #22c55e80}}
+    .near-entry{animation:alert-flash 1s infinite}
+    /* ── Pulse ── */
+    .pulse{animation:pulse 2s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    /* ── Indicator mini cards ── */
+    .ind{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;flex:1}
+    /* ── Signal ── */
+    .sig{border-radius:8px;padding:10px;margin:4px 0;border-left:3px solid}
+    .sig-b{background:#05180d;border-color:var(--g)}.sig-s{background:#180505;border-color:var(--r)}
+    /* ── Zone ── */
+    .zone{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:5px;margin:3px 0;font-size:10px}
+    .zg{background:#05180d33;border-left:2px solid var(--g)}.zr{background:#18050533;border-left:2px solid var(--r)}
+    .zb{background:#0a152533;border-left:2px solid var(--b)}.zp{background:#12082033;border-left:2px solid var(--p)}
+    /* ── SMC panel ── */
+    .smc-row{display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-bottom:1px solid var(--border);font-size:10px}
+    .smc-row:last-child{border-bottom:none}
+    .ob-bull{background:#05180d55;border-left:3px solid #22c55e}
+    .ob-bear{background:#18050555;border-left:3px solid #ef4444}
+    .fvg-bull{background:#0c1a3a55;border-left:3px solid #3b82f6}
+    .fvg-bear{background:#12082055;border-left:3px solid #a855f7}
+    .sweep-bull{background:#1a110055;border-left:3px solid #f59e0b}
+    .sweep-bear{background:#1a050555;border-left:3px solid #f97316}
+    .liq-zone{padding:3px 7px;border-radius:4px;font-size:10px;font-weight:600}
+    .rev-zone-card{border-radius:7px;padding:7px 9px;margin-bottom:4px;border:1px solid}
+    /* ── Session bar ── */
+    .sess-bar{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:7px;font-size:10px;font-weight:600;margin-bottom:6px}
+    /* ── Managed signal (30min window) ── */
+    .msig{border-radius:8px;padding:9px;margin:4px 0;border-left:3px solid;position:relative}
+    .msig-b{background:#05180d;border-color:#22c55e}
+    .msig-s{background:#180505;border-color:#ef4444}
+    .conf-bar{height:3px;border-radius:2px;margin-top:5px;background:var(--card)}
+    .conf-fill{height:100%;border-radius:2px;transition:width .8s,background .8s}
+    /* ── Drawing toolbar ── */
+    #draw-toolbar{position:absolute;left:6px;top:6px;z-index:20;display:flex;flex-direction:column;gap:2px;background:#0d1626dd;border:1px solid var(--border);border-radius:8px;padding:4px;backdrop-filter:blur(4px)}
+    .draw-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px;border:none;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;transition:.1s;font-family:inherit}
+    .draw-btn:hover{background:var(--card);color:var(--text)}
+    .draw-btn.on{background:#1e3a5f;color:#3b82f6;border:1px solid #3b82f640}
+    .draw-btn.danger:hover{background:#2d0707;color:#ef4444}
+    #draw-canvas{position:absolute;top:0;left:0;z-index:10;pointer-events:none}
+    #session-canvas{position:absolute;top:0;left:0;z-index:2;pointer-events:none}
+    /* ── News ── */
+    .news{padding:7px;border-bottom:1px solid var(--border);cursor:pointer}
+    .news:hover{background:var(--card)}
+    [x-cloak]{display:none!important}
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+<!-- ══ TOP BAR ═══════════════════════════════════════════════════════════════ -->
+<div id="topbar">
+
+  <span style="font-size:14px;font-weight:700;color:var(--b)">◈ NAS100</span>
+
+  <!-- Live indicator -->
+  <div style="display:flex;align-items:center;gap:5px">
+    <div style="width:7px;height:7px;border-radius:50%" :class="wsConnected ? 'pulse' : ''"
+         :style="'background:'+(wsConnected?'#22c55e':'#ef4444')"></div>
+    <span style="font-size:10px" :class="wsConnected?'':''" :style="'color:'+(wsConnected?'#22c55e':'#ef4444')"
+          x-text="wsConnected?'LIVE':'OFFLINE'"></span>
+  </div>
+
+  <!-- Price -->
+  <div style="display:flex;align-items:baseline;gap:6px">
+    <span style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums"
+          :style="'color:'+(price.change>=0?'#22c55e':'#ef4444')"
+          x-text="price.price?price.price.toLocaleString('en-US',{minimumFractionDigits:2}):'—'"></span>
+    <span style="font-size:11px"
+          :style="'color:'+(price.change>=0?'#22c55e':'#ef4444')"
+          x-text="price.change!=null?(price.change>=0?'+':'')+price.change.toFixed(2)+'  ('+((price.change_pct||0)).toFixed(2)+'%)':''"></span>
+  </div>
+
+  <!-- Key stats -->
+  <div style="display:flex;gap:18px;padding-left:8px;border-left:1px solid var(--border)">
+    <div><div class="lbl">VIX</div>
+      <span style="font-weight:700" :style="'color:'+(vix>25?'#ef4444':vix>18?'#f59e0b':'#22c55e')" x-text="vix?vix.toFixed(1):'—'"></span>
+    </div>
+    <div><div class="lbl">VWAP</div>
+      <span style="font-weight:700;color:var(--c)" x-text="analysis.vwap?.value?analysis.vwap.value.toLocaleString('en-US',{maximumFractionDigits:2}):'—'"></span>
+    </div>
+    <div><div class="lbl">vs VWAP</div>
+      <span style="font-weight:700" :style="'color:'+(analysis.vwap?.position==='ABOVE'?'#22c55e':'#ef4444')"
+            x-text="analysis.vwap?.position||'—'"></span>
+    </div>
+    <div><div class="lbl">Trend</div>
+      <span class="badge" :class="trendBadge(analysis.trend)" x-text="analysis.trend||'—'"></span>
+    </div>
+    <div><div class="lbl">Net Delta</div>
+      <span style="font-weight:700" :style="'color:'+((analysis.institutional?.cum_delta||0)>0?'#22c55e':'#ef4444')"
+            x-text="analysis.institutional?.cum_delta!=null?((analysis.institutional.cum_delta>0?'+':'')+analysis.institutional.cum_delta.toLocaleString()):'—'"></span>
+    </div>
+    <div><div class="lbl">ATR</div>
+      <span style="font-weight:700;color:var(--p)" x-text="analysis.indicators?.atr?analysis.indicators.atr.toFixed(1):'—'"></span>
+    </div>
+    <div x-show="regime.regime"><div class="lbl">Regime</div>
+      <span class="badge" :class="regimeBadge(regime.regime)" x-text="(regime.regime||'').replace('_',' ')"></span>
+    </div>
+    <div x-show="session.session"><div class="lbl">Session</div>
+      <span class="badge" :class="sessionBadge(session.session)" x-text="session.label||session.session||'—'"></span>
+    </div>
+    <div x-show="regime.reversal_prob!=null"><div class="lbl">Rev%</div>
+      <span style="font-weight:700" :style="'color:'+(regime.reversal_prob>=60?'#ef4444':regime.reversal_prob>=35?'#f59e0b':'#22c55e')"
+            x-text="(regime.reversal_prob||0)+'%'"></span>
+    </div>
+    <div x-show="regime.adx"><div class="lbl">ADX</div>
+      <span style="font-weight:700" :style="'color:'+(regime.adx>=25?'#22c55e':'#64748b')"
+            x-text="(regime.adx||0).toFixed(0)"></span>
+    </div>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <!-- Controls -->
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+    <!-- Timeframe -->
+    <div style="display:flex;gap:2px;background:var(--card);border-radius:6px;padding:2px;border:1px solid var(--border)">
+      <template x-for="t in ['1m','5m','15m','1h','1d']" :key="t">
+        <button @click="tf=t;changeTf()" x-text="t"
+                :style="tf===t?'background:#1e3a5f;color:#3b82f6':'color:var(--muted)'"
+                style="padding:3px 9px;border-radius:4px;border:none;font-size:11px;font-weight:700;cursor:pointer;transition:.1s"></button>
+      </template>
+    </div>
+    <!-- Separator -->
+    <div style="width:1px;height:24px;background:var(--border)"></div>
+    <!-- Indicator pills -->
+    <button @click="toggleInd('vwap')" class="ind-pill" :class="inds.vwap?'on':'off'"
+            style="color:#06b6d4;border-color:#06b6d440;background:#06b6d410">VWAP</button>
+    <button @click="toggleInd('ema9')" class="ind-pill" :class="inds.ema9?'on':'off'"
+            style="color:#f59e0b;border-color:#f59e0b40;background:#f59e0b10">EMA9</button>
+    <button @click="toggleInd('ema21')" class="ind-pill" :class="inds.ema21?'on':'off'"
+            style="color:#e06c75;border-color:#e06c7540;background:#e06c7510">EMA21</button>
+    <button @click="toggleInd('ema50')" class="ind-pill" :class="inds.ema50?'on':'off'"
+            style="color:#56b6c2;border-color:#56b6c240;background:#56b6c210">EMA50</button>
+    <button @click="toggleInd('bb')" class="ind-pill" :class="inds.bb?'on':'off'"
+            style="color:#64748b;border-color:#64748b40;background:#64748b10">BB</button>
+    <button @click="toggleInd('ob')" class="ind-pill" :class="inds.ob?'on':'off'"
+            style="color:#22c55e;border-color:#22c55e40;background:#22c55e10">OB</button>
+    <button @click="toggleInd('fvg')" class="ind-pill" :class="inds.fvg?'on':'off'"
+            style="color:#a855f7;border-color:#a855f740;background:#a855f710">FVG</button>
+    <button @click="toggleInd('poc')" class="ind-pill" :class="inds.poc?'on':'off'"
+            style="color:#f59e0b;border-color:#f59e0b40;background:#f59e0b10">POC</button>
+    <button @click="toggleInd('sr')" class="ind-pill" :class="inds.sr?'on':'off'"
+            style="color:#06b6d4;border-color:#06b6d440;background:#06b6d410" title="Key S&R levels on chart">S/R</button>
+    <button @click="toggleInd('bos')" class="ind-pill" :class="inds.bos?'on':'off'"
+            style="color:#22c55e;border-color:#22c55e40;background:#22c55e10" title="BOS / CHoCH markers">BOS</button>
+    <button @click="toggleInd('sweep')" class="ind-pill" :class="inds.sweep?'on':'off'"
+            style="color:#f59e0b;border-color:#f59e0b40;background:#f59e0b10" title="Liquidity sweeps">SWEEP</button>
+    <!-- Separator -->
+    <div style="width:1px;height:24px;background:var(--border)"></div>
+    <!-- Session pills -->
+    <span style="font-size:9px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Sessions</span>
+    <button @click="toggleSession('premarket')" class="ind-pill" :class="sessions.premarket?'on':'off'"
+            style="color:#f59e0b;border-color:#f59e0b40;background:#f59e0b10" title="Pre-Market 4:00–9:30 AM ET">PRE</button>
+    <button @click="toggleSession('market')" class="ind-pill" :class="sessions.market?'on':'off'"
+            style="color:#22c55e;border-color:#22c55e40;background:#22c55e10" title="Regular Market 9:30 AM–4:00 PM ET">OPEN</button>
+    <button @click="toggleSession('lunch')" class="ind-pill" :class="sessions.lunch?'on':'off'"
+            style="color:#94a3b8;border-color:#94a3b840;background:#94a3b810" title="Lunch 12:00–1:30 PM ET">LUNCH</button>
+    <button @click="toggleSession('afterhours')" class="ind-pill" :class="sessions.afterhours?'on':'off'"
+            style="color:#3b82f6;border-color:#3b82f640;background:#3b82f610" title="After Hours 4:00–8:00 PM ET">A/H</button>
+    <button @click="toggleSession('night')" class="ind-pill" :class="sessions.night?'on':'off'"
+            style="color:#475569;border-color:#47556940;background:#47556910" title="Market Closed / Overnight">NIGHT</button>
+    <!-- Separator -->
+    <div style="width:1px;height:24px;background:var(--border)"></div>
+    <!-- Timezone selector -->
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:10px;color:var(--muted)">🕐</span>
+      <select x-model="tz" @change="CM.applyTz(tz)"
+              style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:3px 6px;font-size:11px;font-family:inherit;cursor:pointer">
+        <template x-for="z in tzList" :key="z.value">
+          <option :value="z.value" x-text="z.label"></option>
+        </template>
+      </select>
+    </div>
+    <!-- Separator -->
+    <div style="width:1px;height:24px;background:var(--border)"></div>
+    <button @click="runAnalysis()" :disabled="analyzing"
+            style="background:#1e3a5f;color:#3b82f6;border:1px solid #3b82f640;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer"
+            :style="analyzing?'opacity:.5;cursor:default':''">
+      <span x-show="!analyzing">⚡ Analyze</span><span x-show="analyzing">…</span>
+    </button>
+    <span style="font-size:10px;color:var(--muted)" x-text="lastUpdate?'↻ '+lastUpdate:''"></span>
+  </div>
+</div>
+
+<!-- ══ MAIN LAYOUT ════════════════════════════════════════════════════════════ -->
+<div id="layout">
+
+  <!-- ────────────────── LEFT ────────────────── -->
+  <div id="left">
+
+    <!-- CHART BOX -->
+    <div class="card" style="padding:8px">
+      <div id="chart-box">
+        <!-- Drawing toolbar -->
+        <div id="draw-toolbar">
+          <button class="draw-btn" :class="activeTool==='cursor'?'on':''" @click="drawTool('cursor')" title="Cursor (Esc)">↖</button>
+          <div style="height:1px;background:var(--border);margin:1px 0"></div>
+          <button class="draw-btn" :class="activeTool==='hline'?'on':''" @click="drawTool('hline')" title="Línea horizontal">—</button>
+          <button class="draw-btn" :class="activeTool==='vline'?'on':''" @click="drawTool('vline')" title="Línea vertical">│</button>
+          <button class="draw-btn" :class="activeTool==='trendline'?'on':''" @click="drawTool('trendline')" title="Línea de tendencia" style="font-size:15px">╱</button>
+          <button class="draw-btn" :class="activeTool==='ray'?'on':''" @click="drawTool('ray')" title="Rayo (extiende a la derecha)" style="font-size:11px">→</button>
+          <button class="draw-btn" :class="activeTool==='rect'?'on':''" @click="drawTool('rect')" title="Rectángulo" style="font-size:11px">▭</button>
+          <button class="draw-btn" :class="activeTool==='fib'?'on':''" @click="drawTool('fib')" title="Fibonacci" style="font-size:11px">ϕ</button>
+          <div style="height:1px;background:var(--border);margin:1px 0"></div>
+          <button class="draw-btn" :class="CM._selectedId?'on':''" @click="CM.deleteSelected()" title="Eliminar seleccionado (Delete)" style="font-size:13px;color:#ef4444">⌫</button>
+          <button class="draw-btn danger" @click="CM.removeLastDrawing()" title="Deshacer (Ctrl+Z)" style="font-size:11px">↩</button>
+          <button class="draw-btn danger" @click="CM.clearDrawings()" title="Borrar todo">✕</button>
+        </div>
+        <!-- Canvas overlay for drawings -->
+        <canvas id="draw-canvas"></canvas>
+        <!-- Candlestick chart -->
+        <div id="chart"></div>
+      </div>
+      <!-- Small status message below chart (not an overlay) -->
+      <div id="chart-msg" x-text="chartMsg"></div>
+    </div>
+
+    <!-- INDICATORS ROW -->
+    <div style="display:flex;gap:8px">
+
+      <!-- RSI -->
+      <div class="ind">
+        <div class="lbl">RSI 14</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px"
+             :style="'color:'+(rsi>70?'#ef4444':rsi<30?'#22c55e':'#f59e0b')"
+             x-text="rsi?rsi.toFixed(1):'—'"></div>
+        <div class="gauge"><div class="gauge-f" :style="'width:'+rsi+'%;background:'+(rsi>70?'#ef4444':rsi<30?'#22c55e':'#f59e0b')"></div></div>
+        <div class="lbl" style="margin-top:4px" x-text="rsi>70?'OVERBOUGHT':rsi<30?'OVERSOLD':'NEUTRAL'"></div>
+      </div>
+
+      <!-- MACD -->
+      <div class="ind">
+        <div class="lbl">MACD Hist</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px"
+             :style="'color:'+((analysis.indicators?.macd_hist||0)>0?'#22c55e':'#ef4444')"
+             x-text="analysis.indicators?.macd_hist!=null?analysis.indicators.macd_hist.toFixed(2):'—'"></div>
+        <div class="lbl" style="margin-top:8px"
+             :style="'color:'+((analysis.indicators?.macd_hist||0)>0?'#22c55e':'#ef4444')"
+             x-text="(analysis.indicators?.macd_hist||0)>0?'BULLISH':'BEARISH'"></div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px"
+             x-text="'L:'+(analysis.indicators?.macd||0).toFixed(1)+' S:'+(analysis.indicators?.macd_signal||0).toFixed(1)"></div>
+      </div>
+
+      <!-- Stoch -->
+      <div class="ind">
+        <div class="lbl">Stoch %K</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px"
+             :style="'color:'+((analysis.indicators?.stoch_k||50)>80?'#ef4444':(analysis.indicators?.stoch_k||50)<20?'#22c55e':'#f59e0b')"
+             x-text="analysis.indicators?.stoch_k!=null?analysis.indicators.stoch_k.toFixed(1):'—'"></div>
+        <div class="gauge"><div class="gauge-f" :style="'width:'+(analysis.indicators?.stoch_k||50)+'%;background:#f59e0b'"></div></div>
+        <div class="lbl" style="margin-top:4px"
+             x-text="(analysis.indicators?.stoch_k||50)>80?'OVERBOUGHT':(analysis.indicators?.stoch_k||50)<20?'OVERSOLD':'NEUTRAL'"></div>
+      </div>
+
+      <!-- ATR -->
+      <div class="ind">
+        <div class="lbl">ATR 14</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px;color:var(--p)"
+             x-text="analysis.indicators?.atr?analysis.indicators.atr.toFixed(1):'—'"></div>
+        <div style="font-size:9px;color:var(--muted);margin-top:8px">Expected range/bar</div>
+        <div style="font-size:10px;color:var(--p);margin-top:2px"
+             x-text="analysis.indicators?.atr&&price.price?(analysis.indicators.atr/price.price*100).toFixed(3)+'% of price':''"></div>
+      </div>
+
+      <!-- Volume -->
+      <div class="ind">
+        <div class="lbl">Vol Ratio</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px"
+             :style="'color:'+((analysis.indicators?.volume_ratio||1)>2?'#a855f7':(analysis.indicators?.volume_ratio||1)>1.3?'#f59e0b':'#64748b')"
+             x-text="analysis.indicators?.volume_ratio?analysis.indicators.volume_ratio.toFixed(2)+'x':'—'"></div>
+        <div class="gauge"><div class="gauge-f"
+             :style="'width:'+Math.min((analysis.indicators?.volume_ratio||1)*33,100)+'%;background:'+((analysis.indicators?.volume_ratio||1)>2?'#a855f7':'#f59e0b')"></div></div>
+        <div class="lbl" style="margin-top:4px"
+             x-text="(analysis.indicators?.volume_ratio||1)>2?'INSTITUTIONAL':(analysis.indicators?.volume_ratio||1)>1.3?'ELEVATED':'NORMAL'"></div>
+      </div>
+
+      <!-- BB Width -->
+      <div class="ind">
+        <div class="lbl">BB Width</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px;color:var(--c)"
+             x-text="analysis.indicators?.bb_upper&&analysis.indicators?.bb_lower?((analysis.indicators.bb_upper-analysis.indicators.bb_lower)).toFixed(1)+' pts':'—'"></div>
+        <div style="font-size:9px;color:var(--muted);margin-top:6px">Upper / Lower</div>
+        <div style="font-size:9px;margin-top:2px">
+          <span style="color:#22c55e" x-text="analysis.indicators?.bb_upper?analysis.indicators.bb_upper.toLocaleString('en-US',{maximumFractionDigits:0}):''"></span>
+          <span style="color:var(--muted)"> / </span>
+          <span style="color:#ef4444" x-text="analysis.indicators?.bb_lower?analysis.indicators.bb_lower.toLocaleString('en-US',{maximumFractionDigits:0}):''"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM TABS -->
+    <div class="card scr" style="flex:1;min-height:300px;display:flex;flex-direction:column">
+      <div class="tabs">
+        <div class="tab" :class="tab==='signals'?'on':'off'" @click="tab='signals'">⚡ Signals <span style="opacity:.6" x-text="'('+currentSigs.length+')'"></span></div>
+        <div class="tab" :class="tab==='managed'?'on':'off'" @click="tab='managed';fetchManagedSignals()">🎯 30m Window <span style="opacity:.6" x-text="managedSignals.filter(s=>s.status==='ACTIVE').length?'('+managedSignals.filter(s=>s.status==='ACTIVE').length+')':''"></span></div>
+        <div class="tab" :class="tab==='smc'?'on':'off'" @click="tab='smc'">🔷 SMC</div>
+        <div class="tab" :class="tab==='patterns'?'on':'off'" @click="tab='patterns'">📊 Patterns</div>
+        <div class="tab" :class="tab==='news'?'on':'off'" @click="tab='news'">📰 News <span style="opacity:.6" x-text="'('+news.length+')'"></span></div>
+        <div class="tab" :class="tab==='allinds'?'on':'off'" @click="tab='allinds'">Indicators</div>
+        <div class="tab" :class="tab==='emas'?'on':'off'" @click="tab='emas'">EMA/BB</div>
+      </div>
+
+      <div class="scr" style="flex:1">
+
+        <!-- SIGNALS — shows all signals for the current timeframe with live distance -->
+        <div x-show="tab==='signals'">
+          <div x-show="currentSigs.length===0" style="text-align:center;padding:24px;color:var(--muted)">
+            No <span x-text="tf.toUpperCase()"></span> signals — click ⚡ Analyze
+          </div>
+          <template x-for="(sig,i) in currentSigs.slice().sort((a,b)=>(b.confidence||0)-(a.confidence||0))" :key="i">
+            <div class="sig" :class="[sig.direction==='BUY'?'sig-b':'sig-s', price.price&&Math.abs(price.price-sig.entry)<(sig.atr||50)*0.4?'near-entry':'']">
+              <!-- Header -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <span class="badge" style="font-size:12px" :class="sig.direction==='BUY'?'bg':'br'" x-text="sig.direction"></span>
+                  <span style="font-weight:700;font-size:13px" :style="'color:'+(sig.direction==='BUY'?'#22c55e':'#ef4444')" x-text="sig.confidence+'%'"></span>
+                  <span x-show="i===0" class="badge bg" style="font-size:9px">BEST</span>
+                </div>
+                <span style="font-size:11px;color:var(--muted)" x-text="'RR '+sig.risk_reward+':1'"></span>
+              </div>
+              <!-- Setup name badge -->
+              <div x-show="sig.setup" style="margin-bottom:6px">
+                <span style="font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid"
+                      :style="sig.direction==='BUY'?'color:#22c55e;border-color:#22c55e40;background:#052e16':'color:#ef4444;border-color:#ef444440;background:#2d0707'"
+                      x-text="sig.setup||''"></span>
+              </div>
+              <!-- Levels -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px">
+                <div><div class="lbl">Entry</div><div style="font-weight:700;color:var(--c)" x-text="(sig.entry||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+                <div><div class="lbl">Stop Loss</div><div style="font-weight:700;color:#ef4444" x-text="(sig.stop_loss||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+                <div><div class="lbl">Take Profit</div><div style="font-weight:700;color:#22c55e" x-text="(sig.take_profit||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+              </div>
+              <!-- Live distance-to-entry -->
+              <div x-show="price.price" style="margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+                  <span style="color:var(--muted)">Distance to entry</span>
+                  <span style="font-weight:700"
+                        :style="'color:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#f59e0b')"
+                        x-text="price.price?(Math.abs(price.price-sig.entry)).toFixed(1)+' pts ('+(Math.abs((price.price-sig.entry)/sig.entry*100)).toFixed(2)+'%)':''"></span>
+                </div>
+                <div class="dist-bar">
+                  <div class="dist-fill" :style="'width:'+Math.min(100,Math.max(0,100-Math.abs(price.price-sig.entry)/(sig.atr||50)*20))+'%;background:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#f59e0b')"></div>
+                </div>
+                <div style="font-size:9px;margin-top:2px" :style="'color:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#64748b')" x-text="sigStatus(sig)"></div>
+              </div>
+              <!-- Reasons -->
+              <template x-for="r in sig.reasons||[]" :key="r">
+                <div style="font-size:10px;color:var(--muted);padding:1px 0">• <span x-text="r"></span></div>
+              </template>
+              <!-- SMC Context at signal entry -->
+              <div style="margin-top:7px;border-top:1px solid var(--border);padding-top:6px">
+                <div class="lbl" style="margin-bottom:5px">SMC Context</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+                  <!-- Regime alignment -->
+                  <div x-show="regime.regime" style="font-size:10px">
+                    <span style="color:var(--muted)">Regime: </span>
+                    <span class="badge" :class="regimeBadge(regime.regime)" style="font-size:9px" x-text="(regime.regime||'').replace('_',' ')"></span>
+                  </div>
+                  <!-- Session -->
+                  <div x-show="session.session" style="font-size:10px">
+                    <span style="color:var(--muted)">Session: </span>
+                    <span class="badge" :class="sessionBadge(session.session)" style="font-size:9px" x-text="session.label||session.session||'—'"></span>
+                  </div>
+                  <!-- Reversal prob -->
+                  <div x-show="regime.reversal_prob!=null" style="font-size:10px">
+                    <span style="color:var(--muted)">Rev%: </span>
+                    <span style="font-weight:700" :style="'color:'+(regime.reversal_prob>=60?'#ef4444':regime.reversal_prob>=35?'#f59e0b':'#22c55e')"
+                          x-text="(regime.reversal_prob||0)+'%'"></span>
+                  </div>
+                  <!-- Continuation prob -->
+                  <div x-show="regime.continuation_prob!=null" style="font-size:10px">
+                    <span style="color:var(--muted)">Cont%: </span>
+                    <span style="font-weight:700" :style="'color:'+(regime.continuation_prob>=60?'#22c55e':regime.continuation_prob>=35?'#f59e0b':'#ef4444')"
+                          x-text="(regime.continuation_prob||0)+'%'"></span>
+                  </div>
+                </div>
+                <!-- Nearest S&R -->
+                <div x-show="sig.nearest_support||sig.nearest_resistance" style="margin-top:5px;font-size:10px">
+                  <span style="color:var(--muted)">S&R: </span>
+                  <span x-show="sig.nearest_support?.price" style="color:#22c55e;font-weight:600"
+                        x-text="'S '+((sig.nearest_support?.price||0).toLocaleString('en-US',{maximumFractionDigits:0}))+' ('+(sig.nearest_support?.label||'')+')'"></span>
+                  <span x-show="sig.nearest_support?.price&&sig.nearest_resistance?.price" style="color:var(--muted)"> · </span>
+                  <span x-show="sig.nearest_resistance?.price" style="color:#ef4444;font-weight:600"
+                        x-text="'R '+((sig.nearest_resistance?.price||0).toLocaleString('en-US',{maximumFractionDigits:0}))+' ('+(sig.nearest_resistance?.label||'')+')'"></span>
+                </div>
+                <!-- Reversal zone at entry -->
+                <div x-show="sig.reversal_zone" style="margin-top:5px;padding:4px 6px;border-radius:5px;background:#1a0c2e;border-left:3px solid #a855f7;font-size:10px">
+                  <span style="color:#a855f7;font-weight:700">Rev Zone </span>
+                  <span style="color:var(--muted)" x-text="sig.reversal_zone?.strength+' score='+(sig.reversal_zone?.score||0)"></span>
+                  <div style="color:var(--muted);font-size:9px" x-text="(sig.reversal_zone?.confluences||[]).slice(0,3).join(', ')"></div>
+                </div>
+                <!-- Nearby OB -->
+                <template x-if="smcContextForSig(sig).ob">
+                  <div style="margin-top:5px;padding:3px 6px;border-radius:5px;font-size:10px"
+                       :class="smcContextForSig(sig).ob.type==='BULLISH'?'ob-bull':'ob-bear'">
+                    <span style="font-weight:700" :style="smcContextForSig(sig).ob.type==='BULLISH'?'color:#22c55e':'color:#ef4444'"
+                          x-text="smcContextForSig(sig).ob.type+' OB'"></span>
+                    <span style="color:var(--muted)" x-text="' '+((smcContextForSig(sig).ob.low||0).toFixed(0))+' – '+((smcContextForSig(sig).ob.high||0).toFixed(0))"></span>
+                  </div>
+                </template>
+                <!-- Nearby FVG -->
+                <template x-if="smcContextForSig(sig).fvg">
+                  <div style="margin-top:3px;padding:3px 6px;border-radius:5px;font-size:10px"
+                       :class="smcContextForSig(sig).fvg.type==='BULLISH'?'fvg-bull':'fvg-bear'">
+                    <span style="font-weight:700;color:#3b82f6" x-text="smcContextForSig(sig).fvg.type+' FVG'"></span>
+                    <span style="color:var(--muted)" x-text="' '+((smcContextForSig(sig).fvg.low||0).toFixed(0))+' – '+((smcContextForSig(sig).fvg.high||0).toFixed(0))"></span>
+                  </div>
+                </template>
+                <!-- ADX -->
+                <div x-show="regime.adx" style="margin-top:5px;font-size:10px">
+                  <span style="color:var(--muted)">ADX: </span>
+                  <span style="font-weight:700" :style="'color:'+(regime.adx>=25?'#22c55e':'#f59e0b')"
+                        x-text="(regime.adx||0).toFixed(0)+(regime.adx>=25?' (TRENDING)':' (RANGING)')"></span>
+                </div>
+              </div>
+              <!-- Badges -->
+              <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
+                <span class="badge bx" x-text="'News: '+(sig.news_sentiment||'—')"></span>
+                <span class="badge bx" x-text="'Pattern: '+(sig.pattern_bias||'—')"></span>
+                <span class="badge bx" x-text="'Win: '+(sig.pattern_win_rate||'—')+'%'"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- MANAGED SIGNALS — 30-minute rolling window -->
+        <div x-show="tab==='managed'">
+          <!-- Window stats bar -->
+          <div x-show="signalStats.window_remaining_s!=null" style="background:var(--card);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-weight:700;color:var(--b)">30-Min Signal Window</span>
+              <span class="badge bb" x-text="winRemain(signalStats)"></span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center">
+              <div><div class="lbl">Active</div><b style="color:#22c55e" x-text="signalStats.active_count||0"></b></div>
+              <div><div class="lbl">TP Hits</div><b style="color:#22c55e" x-text="signalStats.tp_hits||0"></b></div>
+              <div><div class="lbl">SL Hits</div><b style="color:#ef4444" x-text="signalStats.sl_hits||0"></b></div>
+              <div><div class="lbl">Win%</div><b :style="'color:'+((signalStats.win_rate_pct||0)>=55?'#22c55e':'#f59e0b')" x-text="(signalStats.win_rate_pct||0)+'%'"></b></div>
+            </div>
+            <!-- Window progress bar -->
+            <div style="margin-top:8px">
+              <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-bottom:3px">
+                <span>Window elapsed</span>
+                <span x-text="Math.round((signalStats.window_elapsed_pct||0)*100)+'%'"></span>
+              </div>
+              <div class="conf-bar">
+                <div class="conf-fill" :style="'width:'+Math.round((signalStats.window_elapsed_pct||0)*100)+'%;background:'+((signalStats.window_elapsed_pct||0)>0.8?'#ef4444':'#3b82f6')"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Signal cards -->
+          <div x-show="managedSignals.length===0" style="text-align:center;padding:24px;color:var(--muted)">
+            No managed signals — run ⚡ Analyze to generate the first signal
+          </div>
+          <template x-for="sig in managedSignals" :key="sig.id">
+            <div class="msig" :class="sig.direction==='BUY'?'msig-b':'msig-s'">
+              <!-- Header -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+                  <span class="badge" :class="sig.direction==='BUY'?'bg':'br'" x-text="sig.direction"></span>
+                  <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;border:1px solid"
+                        :style="sig.direction==='BUY'?'color:#22c55e;border-color:#22c55e40;background:#052e16':'color:#ef4444;border-color:#ef444440;background:#2d0707'"
+                        x-text="sig.setup"></span>
+                  <span class="badge" :class="{'bx':sig.status==='EXPIRED'||sig.status==='INVALIDATED','bg':sig.status==='TP_HIT','br':sig.status==='SL_HIT','bb':sig.status==='ACTIVE'}"
+                        x-text="sig.status"></span>
+                </div>
+                <span style="font-size:10px;color:var(--muted)" x-text="'RR '+sig.risk_reward+'  '+(sig.window_remaining_s>0?winRemain(sig)+' left':'exp')"></span>
+              </div>
+              <!-- Confidence -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="font-size:18px;font-weight:700" :style="'color:'+confColor(sig.current_confidence)"
+                      x-text="sig.current_confidence+'%'"></span>
+                <div style="text-align:right">
+                  <div style="font-size:10px" :style="'color:'+(sig.confidence_change>=0?'#22c55e':'#ef4444')"
+                       x-text="(sig.confidence_change>=0?'+':'')+sig.confidence_change+' pts ('+sig.confidence_trend+')'"></div>
+                  <div style="font-size:9px;color:var(--muted)" x-text="sig.recommendation"></div>
+                </div>
+              </div>
+              <div class="conf-bar">
+                <div class="conf-fill" :style="'width:'+sig.current_confidence+'%;background:'+confColor(sig.current_confidence)"></div>
+              </div>
+              <!-- Levels -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:7px;margin-bottom:6px">
+                <div><div class="lbl">Entry</div><div style="font-weight:700;color:var(--c);font-size:11px" x-text="(sig.entry||0).toFixed(1)"></div></div>
+                <div><div class="lbl">SL</div><div style="font-weight:700;color:#ef4444;font-size:11px" x-text="(sig.stop_loss||0).toFixed(1)"></div></div>
+                <div><div class="lbl">TP</div><div style="font-weight:700;color:#22c55e;font-size:11px" x-text="(sig.take_profit||0).toFixed(1)"></div></div>
+              </div>
+              <!-- PnL -->
+              <div style="display:flex;gap:10px;font-size:10px;margin-bottom:5px">
+                <span style="color:var(--muted)">P&L: </span>
+                <span style="font-weight:700" :style="'color:'+((sig.pnl_pts||0)>=0?'#22c55e':'#ef4444')"
+                      x-text="((sig.pnl_pts||0)>=0?'+':'')+((sig.pnl_pts||0).toFixed(1))+' pts ('+sig.pnl_atr_units+' ATR)'"></span>
+                <span style="color:var(--muted)" x-text="'Max+'+((sig.max_favorable_pts||0).toFixed(1))"></span>
+              </div>
+              <!-- SMC Context -->
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+                <span x-show="sig.regime_at_creation" class="badge bx" style="font-size:9px" x-text="'Regime: '+(sig.regime_at_creation||'').replace('_',' ')"></span>
+                <span x-show="sig.session_at_creation" class="badge bx" style="font-size:9px" x-text="'Session: '+sig.session_at_creation"></span>
+              </div>
+              <!-- Reasons -->
+              <template x-for="r in (sig.reasons||[]).slice(0,3)" :key="r">
+                <div style="font-size:9px;color:var(--muted)">• <span x-text="r"></span></div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- SMC TAB -->
+        <div x-show="tab==='smc'">
+          <!-- Regime panel -->
+          <div x-show="regime.regime" style="background:var(--card);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="font-weight:700;color:var(--b);margin-bottom:6px">Market Regime</div>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+              <span class="badge" style="font-size:11px" :class="regimeBadge(regime.regime)" x-text="(regime.regime||'').replace('_',' ')"></span>
+              <span style="font-size:10px;color:var(--muted)" x-text="'Confidence: '+(regime.confidence||0)+'%'"></span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;text-align:center">
+              <div style="background:var(--bg);border-radius:6px;padding:5px">
+                <div class="lbl">Trend</div>
+                <div style="font-weight:700;font-size:13px;color:#22c55e" x-text="(regime.continuation_prob||0)+'%'"></div>
+              </div>
+              <div style="background:var(--bg);border-radius:6px;padding:5px">
+                <div class="lbl">Reversal</div>
+                <div style="font-weight:700;font-size:13px" :style="'color:'+((regime.reversal_prob||0)>=50?'#ef4444':'#f59e0b')"
+                     x-text="(regime.reversal_prob||0)+'%'"></div>
+              </div>
+              <div style="background:var(--bg);border-radius:6px;padding:5px">
+                <div class="lbl">Pullback</div>
+                <div style="font-weight:700;font-size:13px;color:#f59e0b" x-text="(regime.pullback_prob||0)+'%'"></div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10px;margin-bottom:6px">
+              <div><div class="lbl">ADX</div><b :style="'color:'+(regime.adx>=25?'#22c55e':'#64748b')" x-text="(regime.adx||0).toFixed(0)"></b></div>
+              <div><div class="lbl">DI+</div><b style="color:#22c55e" x-text="(regime.di_plus||0).toFixed(0)"></b></div>
+              <div><div class="lbl">DI−</div><b style="color:#ef4444" x-text="(regime.di_minus||0).toFixed(0)"></b></div>
+            </div>
+            <div x-show="(regime.preferred_setups||[]).length" style="margin-bottom:4px">
+              <div class="lbl" style="margin-bottom:3px">Preferred Setups</div>
+              <div style="display:flex;flex-wrap:wrap;gap:3px">
+                <template x-for="s in regime.preferred_setups||[]" :key="s">
+                  <span class="badge bg" style="font-size:9px" x-text="s"></span>
+                </template>
+              </div>
+            </div>
+            <div x-show="(regime.avoid_setups||[]).length">
+              <div class="lbl" style="margin-bottom:3px">Avoid</div>
+              <div style="display:flex;flex-wrap:wrap;gap:3px">
+                <template x-for="s in regime.avoid_setups||[]" :key="s">
+                  <span class="badge br" style="font-size:9px" x-text="s"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+          <!-- Session panel -->
+          <div x-show="session.session" style="background:var(--card);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="font-weight:700;color:var(--y);margin-bottom:6px">Market Session</div>
+            <div class="sess-bar" :style="'background:'+(session.volatility==='EXTREME'?'#2d070755':session.volatility==='HIGH'?'#2d1f0455':'#0c1a3a55')">
+              <span class="badge" :class="sessionBadge(session.session)" x-text="session.label||session.session"></span>
+              <span style="color:var(--text)" x-text="session.time_et||''"></span>
+              <div style="flex:1"></div>
+              <span class="badge" :class="session.volatility==='EXTREME'||session.volatility==='HIGH'?'br':session.volatility==='LOW'?'bx':'by'"
+                    x-text="'Vol: '+(session.volatility||'—')"></span>
+            </div>
+            <div x-show="session.notes" style="font-size:10px;color:var(--muted);line-height:1.6;margin-bottom:5px" x-text="session.notes"></div>
+            <div x-show="!session.tradeable" style="font-size:10px;color:#ef4444;font-weight:700">⚠ LOW QUALITY — Avoid trading this session</div>
+          </div>
+          <!-- S&R Key Levels -->
+          <div style="background:var(--card);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="font-weight:700;color:var(--c);margin-bottom:6px">Key S&R Levels</div>
+            <div x-show="(sr.key_levels||[]).length===0" style="font-size:10px;color:var(--muted)">Run Analyze to compute S&R levels</div>
+            <template x-for="lvl in (sr.key_levels||[]).slice(0,12)" :key="lvl.price">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px">
+                <span style="font-weight:600" :style="'color:'+(lvl.side==='resistance'?'#ef4444':'#22c55e')"
+                      x-text="lvl.label"></span>
+                <span style="font-weight:700;color:var(--c)" x-text="(lvl.price||0).toLocaleString('en-US',{maximumFractionDigits:0})"></span>
+                <div style="display:flex;gap:2px">
+                  <template x-for="i in (lvl.strength||0)" :key="i"><span style="color:#f59e0b;font-size:9px">★</span></template>
+                </div>
+                <span style="color:var(--muted)" x-text="price.price?Math.abs(price.price-(lvl.price||0)).toFixed(0)+' pts':''"></span>
+              </div>
+            </template>
+          </div>
+          <!-- Reversal Zones -->
+          <div x-show="revZones.length">
+            <div style="font-weight:700;color:var(--p);margin-bottom:6px">Top Reversal Zones</div>
+            <template x-for="z in revZones.slice(0,5)" :key="z.price">
+              <div class="rev-zone-card" :style="z.direction==='UP'?'border-color:#22c55e20;background:#05180d':'border-color:#ef444420;background:#180505'">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <span style="font-weight:700" :style="z.direction==='UP'?'color:#22c55e':'color:#ef4444'"
+                        x-text="z.direction==='UP'?'▲ SUPPORT REVERSAL':'▼ RESISTANCE REVERSAL'"></span>
+                  <span class="badge" :class="z.score>=12?'bp':z.score>=8?'br':'by'" x-text="z.strength+' ('+z.score+')'"></span>
+                </div>
+                <div style="font-size:11px;font-weight:700;color:var(--c)" x-text="(z.price||0).toLocaleString('en-US',{maximumFractionDigits:0})"></div>
+                <div style="font-size:9px;color:var(--muted);margin-top:3px" x-text="(z.confluences||[]).slice(0,4).join(' · ')"></div>
+                <div x-show="price.price" style="font-size:9px;margin-top:2px"
+                     :style="Math.abs((z.price||0)-price.price)<(analysis.indicators?.atr||50)*0.5?'color:#f59e0b;font-weight:700':'color:var(--muted)'"
+                     x-text="price.price?Math.abs((z.price||0)-price.price).toFixed(0)+' pts away':''"></div>
+              </div>
+            </template>
+          </div>
+          <!-- BOS / CHoCH -->
+          <div style="margin-top:8px">
+            <div x-show="smc.market_structure?.bos" style="background:#05180d;border:1px solid #22c55e20;border-radius:7px;padding:8px;margin-bottom:5px">
+              <div class="lbl" style="margin-bottom:2px">Break of Structure</div>
+              <div style="font-weight:700;color:#22c55e;font-size:11px" x-text="smc.market_structure?.bos?.type"></div>
+              <div style="font-size:10px;color:var(--muted)" x-text="smc.market_structure?.bos?.description"></div>
+            </div>
+            <div x-show="smc.market_structure?.choch" style="background:#180505;border:1px solid #ef444420;border-radius:7px;padding:8px">
+              <div class="lbl" style="margin-bottom:2px">Change of Character</div>
+              <div style="font-weight:700;color:#ef4444;font-size:11px" x-text="smc.market_structure?.choch?.type"></div>
+              <div style="font-size:10px;color:var(--muted)" x-text="smc.market_structure?.choch?.description"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PATTERNS -->
+        <div x-show="tab==='patterns'">
+          <div x-show="!patterns.statistics||patterns.statistics.total_matches===0" style="text-align:center;padding:24px;color:var(--muted)">
+            No pattern data — click Analyze
+          </div>
+          <div x-show="patterns.statistics&&patterns.statistics.total_matches>0">
+            <div style="background:var(--card);border-radius:8px;padding:12px;margin-bottom:10px">
+              <div style="font-weight:700;color:var(--b);margin-bottom:8px">Historical Pattern Match</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                <div><div class="lbl">Matches</div><b x-text="patterns.statistics?.total_matches"></b></div>
+                <div><div class="lbl">Bias</div>
+                  <b :style="'color:'+(patterns.statistics?.bias==='BULLISH'?'#22c55e':patterns.statistics?.bias==='BEARISH'?'#ef4444':'#f59e0b')"
+                     x-text="patterns.statistics?.bias"></b></div>
+                <div><div class="lbl">Confidence</div><b x-text="(patterns.statistics?.confidence||0)+'%'"></b></div>
+                <div><div class="lbl">Win Rate Long</div><b style="color:#22c55e" x-text="(patterns.statistics?.win_rate_long||0)+'%'"></b></div>
+                <div><div class="lbl">Avg Move</div>
+                  <b :style="'color:'+((patterns.statistics?.avg_move_pct||0)>=0?'#22c55e':'#ef4444')"
+                     x-text="((patterns.statistics?.avg_move_pct||0)>=0?'+':'')+patterns.statistics?.avg_move_pct+'%'"></b></div>
+                <div><div class="lbl">Avg Range</div><b style="color:#f59e0b" x-text="(patterns.statistics?.avg_volatility_pct||0)+'%'"></b></div>
+              </div>
+              <div style="margin-top:8px;font-size:10px;color:var(--muted)" x-text="patterns.summary"></div>
+            </div>
+            <template x-for="(m,i) in (patterns.matches||[]).slice(0,8)" :key="i">
+              <div style="display:flex;justify-content:space-between;padding:4px 6px;border-bottom:1px solid var(--border);font-size:10px">
+                <span style="color:var(--muted)" x-text="(m.date||'').substring(0,10)"></span>
+                <span x-text="'Sim: '+((m.similarity||0)*100).toFixed(0)+'%'"></span>
+                <span :style="'color:'+(m.direction==='UP'?'#22c55e':'#ef4444')" x-text="m.direction"></span>
+                <span :style="'color:'+((m.move_pct||0)>=0?'#22c55e':'#ef4444')" x-text="((m.move_pct||0)>=0?'+':'')+m.move_pct+'%'"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- NEWS -->
+        <div x-show="tab==='news'">
+          <div x-show="news.length===0" style="text-align:center;padding:24px;color:var(--muted)">Loading news...</div>
+          <template x-for="(item,i) in news.slice(0,15)" :key="i">
+            <div class="news" @click="item.url&&window.open(item.url,'_blank')">
+              <div style="font-weight:600;line-height:1.4;margin-bottom:3px" x-text="item.title"></div>
+              <div style="display:flex;gap:8px">
+                <span style="color:var(--b);font-size:10px" x-text="item.source"></span>
+                <span style="color:var(--muted);font-size:10px" x-text="(item.timestamp||'').substring(0,10)"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- ALL INDICATORS -->
+        <div x-show="tab==='allinds'" style="display:grid;grid-template-columns:1fr 1fr;gap:1px">
+          <template x-for="[k,v] in Object.entries(analysis.indicators||{})" :key="k">
+            <div style="display:flex;justify-content:space-between;padding:5px 6px;border-bottom:1px solid var(--border)">
+              <span style="color:var(--muted)" x-text="k.replace(/_/g,' ').toUpperCase()"></span>
+              <b x-text="typeof v==='number'?v.toFixed(v>100?1:4):v"></b>
+            </div>
+          </template>
+        </div>
+
+        <!-- EMA / BB LEVELS -->
+        <div x-show="tab==='emas'">
+          <div style="margin-bottom:12px">
+            <div class="lbl" style="margin-bottom:8px">Exponential Moving Averages</div>
+            <template x-for="[name,val,color] in [['EMA 9',analysis.indicators?.ema9,'#f59e0b'],['EMA 21',analysis.indicators?.ema21,'#e06c75'],['EMA 50',analysis.indicators?.ema50,'#56b6c2'],['EMA 200',analysis.indicators?.ema200,'#888']]" :key="name">
+              <div x-show="val" style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+                <span style="font-weight:600" :style="'color:'+color" x-text="name"></span>
+                <span style="font-weight:700;color:var(--c)" x-text="val?val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'"></span>
+                <span style="font-size:10px" :style="'color:'+((price.price||0)>(val||0)?'#22c55e':'#ef4444')"
+                      x-text="(price.price||0)>(val||0)?'▲ ABOVE':'▼ BELOW'"></span>
+                <span style="font-size:10px;color:var(--muted)"
+                      x-text="price.price&&val?(((price.price-val)/val*100)>=0?'+':'')+((price.price-val)/val*100).toFixed(2)+'%':''"></span>
+              </div>
+            </template>
+          </div>
+          <div class="lbl" style="margin-bottom:8px">Bollinger Bands (20, 2σ)</div>
+          <template x-for="[name,val] in [['Upper Band',analysis.indicators?.bb_upper],['Middle (SMA20)',analysis.indicators?.bb_mid],['Lower Band',analysis.indicators?.bb_lower]]" :key="name">
+            <div x-show="val" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--muted)" x-text="name"></span>
+              <span style="font-weight:700" x-text="val?val.toLocaleString('en-US',{minimumFractionDigits:1}):'—'"></span>
+              <span style="font-size:10px;color:var(--muted)"
+                    x-text="price.price&&val?(((price.price-val)/val*100)>=0?'+':'')+((price.price-val)/val*100).toFixed(2)+'%':''"></span>
+            </div>
+          </template>
+        </div>
+
+      </div><!-- end scr -->
+    </div><!-- end bottom tabs card -->
+
+  </div><!-- end left -->
+
+  <!-- ────────────────── RIGHT ────────────────── -->
+  <div id="right" class="scr">
+
+    <!-- ── COMPOSITE PREDICTION ENGINE ─────────────────────────────────── -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <div style="width:7px;height:7px;border-radius:50%;flex-shrink:0"
+             :style="prediction?'background:'+(prediction.direction==='BULLISH'?'#22c55e':prediction.direction==='BEARISH'?'#ef4444':'#f59e0b'):'background:#64748b'"></div>
+        <span style="font-weight:700;color:#e2e8f0;font-size:11px">Composite Prediction</span>
+        <template x-if="prediction">
+          <span class="badge" style="font-size:10px"
+                :class="prediction.direction==='BULLISH'?'bg':prediction.direction==='BEARISH'?'br':'by'"
+                x-text="prediction.confLabel"></span>
+        </template>
+        <div style="flex:1"></div>
+        <span x-show="prediction" style="font-size:10px;font-weight:700"
+              :style="prediction?.direction==='BULLISH'?'color:#22c55e':prediction?.direction==='BEARISH'?'color:#ef4444':'color:#f59e0b'"
+              x-text="prediction?(prediction.direction==='BULLISH'?prediction.bullPct:prediction.direction==='BEARISH'?prediction.bearPct:50)+'%':''"></span>
+      </div>
+
+      <div x-show="prediction" style="padding:10px">
+
+        <!-- Bull / Bear split bar -->
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;margin-bottom:4px">
+            <span style="color:#22c55e" x-text="'BULL '+prediction?.bullPct+'%'"></span>
+            <span style="color:var(--muted);font-size:9px;font-weight:400"
+                  x-text="'net +'+(prediction?.netPct||0)+'% '+(prediction?.direction||'')"></span>
+            <span style="color:#ef4444" x-text="prediction?.bearPct+'% BEAR'"></span>
+          </div>
+          <div style="height:10px;border-radius:5px;overflow:hidden;display:flex;background:var(--card)">
+            <div :style="'width:'+prediction?.bullPct+'%;background:linear-gradient(90deg,#15803d,#22c55e);transition:width .8s'"></div>
+            <div :style="'width:'+prediction?.bearPct+'%;background:linear-gradient(90deg,#ef4444,#7f1d1d);transition:width .8s'"></div>
+          </div>
+          <!-- strength stars -->
+          <div style="text-align:center;margin-top:4px">
+            <template x-for="i in (prediction?.strength||1)" :key="i">
+              <span style="color:#f59e0b;font-size:10px">★</span>
+            </template>
+            <template x-for="i in (3-(prediction?.strength||1))" :key="i">
+              <span style="color:#1e2d45;font-size:10px">★</span>
+            </template>
+          </div>
+        </div>
+
+        <!-- Signal factors breakdown -->
+        <div style="margin-bottom:10px">
+          <div class="lbl" style="margin-bottom:5px">Signal Breakdown</div>
+          <template x-for="f in prediction?.factors||[]" :key="f.name">
+            <div style="display:flex;align-items:center;gap:4px;padding:2px 0;font-size:10px">
+              <span style="width:18px;text-align:center;font-size:9px;font-weight:700;padding:1px 2px;border-radius:2px;flex-shrink:0"
+                    :style="f.dir==='BULL'?'background:#052e16;color:#22c55e':'background:#2d0707;color:#ef4444'"
+                    x-text="f.icon"></span>
+              <span style="flex:1;color:var(--muted)" x-text="f.name"></span>
+              <div style="width:40px;height:4px;background:var(--card);border-radius:2px;flex-shrink:0">
+                <div :style="'width:'+(f.pts/20*100)+'%;height:100%;border-radius:2px;background:'+(f.dir==='BULL'?'#22c55e':'#ef4444')"></div>
+              </div>
+              <span style="width:20px;text-align:right;font-weight:700;font-size:9px"
+                    :style="f.dir==='BULL'?'color:#22c55e':'color:#ef4444'"
+                    x-text="'+'+f.pts"></span>
+            </div>
+          </template>
+          <div x-show="!prediction?.factors?.length" style="font-size:10px;color:var(--muted)">No active factors</div>
+        </div>
+
+        <!-- Price magnets / targets -->
+        <div x-show="(prediction?.targets||[]).length">
+          <div class="lbl" style="margin-bottom:5px">Institutional Price Magnets</div>
+          <template x-for="t in prediction?.targets||[]" :key="t.label">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:4px;margin-bottom:2px;font-size:10px"
+                 :style="t.dir==='UP'?'background:#05180d33;border-left:2px solid #22c55e':'background:#18050533;border-left:2px solid #ef4444'">
+              <span style="color:var(--muted)" x-text="t.label"></span>
+              <span style="font-weight:700;color:var(--c)" x-text="(t.price||0).toLocaleString('en-US',{maximumFractionDigits:0})"></span>
+              <span style="font-weight:700;font-size:9px"
+                    :style="t.dir==='UP'?'color:#22c55e':'color:#ef4444'"
+                    x-text="(t.dir==='UP'?'▲ +':'▼ -')+(t.dist||0)+' pts'"></span>
+            </div>
+          </template>
+        </div>
+
+        <!-- Institutional Flow summary -->
+        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;text-align:center">
+            <div style="background:var(--card);border-radius:5px;padding:4px">
+              <div class="lbl">Flow</div>
+              <div style="font-size:11px;font-weight:700;margin-top:1px"
+                   :style="'color:'+((analysis.institutional?.cum_delta||0)>0?'#22c55e':'#ef4444')"
+                   x-text="(analysis.institutional?.cum_delta||0)>0?'BID':'ASK'"></div>
+            </div>
+            <div style="background:var(--card);border-radius:5px;padding:4px">
+              <div class="lbl">Structure</div>
+              <div style="font-size:11px;font-weight:700;margin-top:1px"
+                   :style="'color:'+(smc.market_structure?.trend==='BULLISH'?'#22c55e':smc.market_structure?.trend==='BEARISH'?'#ef4444':'#f59e0b')"
+                   x-text="smc.market_structure?.trend||'—'"></div>
+            </div>
+            <div style="background:var(--card);border-radius:5px;padding:4px">
+              <div class="lbl">vs VWAP</div>
+              <div style="font-size:11px;font-weight:700;margin-top:1px"
+                   :style="'color:'+(analysis.vwap?.position==='ABOVE'?'#22c55e':'#ef4444')"
+                   x-text="analysis.vwap?.position||'—'"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div x-show="!prediction" style="padding:14px;text-align:center;font-size:10px;color:var(--muted)">
+        Run ⚡ Analyze to compute prediction
+      </div>
+    </div>
+
+    <!-- ── GLOBAL SESSIONS & VOLATILITY ────────────────────────────────── -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <!-- Header -->
+      <div style="padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+        <div style="width:7px;height:7px;border-radius:50%;background:#f59e0b;flex-shrink:0"
+             :class="sessionSchedule.some(s=>s.openingSoon||s.justOpened)?'pulse':''"></div>
+        <span style="font-weight:700;color:#f59e0b;font-size:11px">Global Sessions</span>
+        <!-- Highlight next event -->
+        <template x-if="sessionSchedule.find(s=>s.openingSoon||s.justOpened)">
+          <span class="badge by" style="font-size:9px"
+                x-text="sessionSchedule.find(s=>s.openingSoon||s.justOpened)?.lbl+' '+sessionSchedule.find(s=>s.openingSoon||s.justOpened)?.timeInfo"></span>
+        </template>
+        <div style="flex:1"></div>
+        <span style="font-size:9px;color:var(--muted)" x-text="etTime()"></span>
+      </div>
+
+      <div style="padding:6px">
+        <template x-for="s in sessionSchedule" :key="s.id">
+          <!-- Full card for open / about to open (within 45 min) -->
+          <div style="margin-bottom:4px;border-radius:7px;overflow:hidden;border:1px solid;transition:.3s"
+               :style="(s.open||s.openingSoon)?('border-color:'+s.clr+'50;background:'+s.clr+'0a'):'border-color:var(--border);background:transparent'">
+
+            <!-- Row: status dot + name + impact + time -->
+            <div style="display:flex;align-items:center;gap:5px;padding:5px 8px">
+              <div style="width:6px;height:6px;border-radius:50%;flex-shrink:0"
+                   :style="'background:'+(s.open?s.clr:'#334155')"
+                   :class="s.open?'pulse':''"></div>
+              <span style="font-weight:700;font-size:10px;flex:1" :style="'color:'+(s.open?s.clr:'#64748b')"
+                    x-text="s.lbl"></span>
+              <!-- Impact badge -->
+              <span style="font-size:8px;padding:1px 4px;border-radius:2px;font-weight:700;letter-spacing:.03em"
+                    :style="s.imp==='EXTREME'?'background:#052e16;color:#22c55e':
+                            s.imp==='HIGH'?'background:#2d1f04;color:#f59e0b':
+                            s.imp==='MED'?'background:#0c1a3a;color:#3b82f6':
+                            'background:var(--card);color:#475569'"
+                    x-text="s.imp"></span>
+              <!-- Status -->
+              <span style="font-size:9px;font-weight:700"
+                    :style="s.status==='JUST OPENED'?'color:#22c55e':
+                            s.status==='OPENING'?'color:#f59e0b':
+                            s.status==='OPEN'?'color:#22c55e':
+                            s.status==='CLOSING'?'color:#ef4444':
+                            'color:#475569'"
+                    x-text="s.status==='JUST OPENED'?'JUST OPENED':
+                             s.status==='OPENING'?('in '+s.timeInfo.replace('Opens in ','')):
+                             s.status==='OPEN'?'● OPEN':
+                             s.status==='CLOSING'?'CLOSING':
+                             s.timeInfo.replace('Opens in ','in ')"></span>
+            </div>
+
+            <!-- Expanded: open, just opened, opening soon, or closing soon -->
+            <div x-show="s.open || s.openingSoon"
+                 style="border-top:1px solid var(--border);padding:5px 8px 7px">
+
+              <!-- Time bar (session elapsed) -->
+              <div x-show="s.open" style="margin-bottom:5px">
+                <div style="height:3px;background:var(--card);border-radius:2px;overflow:hidden">
+                  <div :style="'width:'+Math.min(100,Math.round(s.sinceOpen/(s.mClose+s.sinceOpen||1)*100))+'%;height:100%;border-radius:2px;background:'+s.clr+';transition:width .8s'"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--muted);margin-top:2px">
+                  <span x-text="'Open '+s.sinceOpen+'m'"></span>
+                  <span x-text="s.status==='CLOSING'?'⚠ CLOSING':('Closes '+s.timeInfo.replace('Closes in ','in '))"></span>
+                </div>
+              </div>
+
+              <!-- Pre-open countdown bar -->
+              <div x-show="s.openingSoon&&!s.open" style="margin-bottom:5px">
+                <div style="height:3px;background:var(--card);border-radius:2px;overflow:hidden">
+                  <div :style="'width:'+Math.max(5,Math.round((45-s.mOpen)/45*100))+'%;height:100%;border-radius:2px;background:'+s.clr+';transition:width .8s'"></div>
+                </div>
+                <div style="font-size:8px;color:#f59e0b;margin-top:2px;font-weight:700"
+                     x-text="'⚡ Opening in '+s.timeInfo.replace('Opens in ','')"></div>
+              </div>
+
+              <!-- Directional prediction -->
+              <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap">
+                <span class="badge" style="font-size:9px"
+                      :class="s.bias.dir==='BULL'?'bg':s.bias.dir==='BEAR'?'br':'by'"
+                      x-text="s.bias.dir"></span>
+                <span style="font-size:9px;color:var(--muted)" x-text="s.bias.conf+'% conf'"></span>
+                <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px"
+                      :style="s.bias.dir==='BULL'?'color:#22c55e;background:#05180d':
+                              s.bias.dir==='BEAR'?'color:#ef4444;background:#2d0707':
+                              'color:#f59e0b;background:#2d1f04'"
+                      x-text="s.bias.pattern"></span>
+              </div>
+              <div style="font-size:9px;color:var(--muted);line-height:1.5" x-text="s.bias.note"></div>
+            </div>
+
+          </div>
+        </template>
+        <div style="font-size:8px;color:#334155;text-align:center;margin-top:2px">Times approx UTC (EDT/BST season)</div>
+      </div>
+    </div>
+
+    <!-- ── 5m SIGNAL PANEL ──────────────────────────────────────────── -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;cursor:pointer;background:var(--card);border-bottom:1px solid var(--border)" @click="toggleSig('m5')">
+        <div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0" :style="showSig.m5?'opacity:1':'opacity:.3'"></div>
+        <span style="font-weight:700;color:#f59e0b;font-size:11px">5m Signals</span>
+        <span class="badge" style="background:#f59e0b20;color:#f59e0b;border-color:#f59e0b40" x-text="sig5m.length+' signal'+(sig5m.length!==1?'s':'')"></span>
+        <div style="flex:1"></div>
+        <span style="font-size:9px;color:var(--muted)" x-text="showSig.m5?'▾ visible':'▸ hidden'"></span>
+      </div>
+      <div x-show="showSig.m5" style="padding:8px">
+        <div x-show="sig5m.length===0" style="text-align:center;padding:16px 0;color:var(--muted);font-size:11px">No 5m signals — run ⚡ Analyze</div>
+        <template x-for="(sig,i) in bestSig(sig5m)" :key="i">
+          <div class="sig" style="margin-bottom:5px"
+               :class="[sig.direction==='BUY'?'sig-b':'sig-s', price.price&&Math.abs(price.price-sig.entry)<(sig.atr||50)*0.4?'near-entry':'']">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+              <div style="display:flex;align-items:center;gap:5px">
+                <span class="badge" :class="sig.direction==='BUY'?'bg':'br'" x-text="sig.direction"></span>
+                <span style="font-weight:700" :style="'color:'+(sig.direction==='BUY'?'#22c55e':'#ef4444')" x-text="sig.confidence+'%'"></span>
+              </div>
+              <span style="font-size:10px;color:var(--muted)" x-text="'RR '+sig.risk_reward+':1'"></span>
+            </div>
+            <div x-show="sig.setup" style="margin-bottom:5px">
+              <span style="font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid"
+                    :style="sig.direction==='BUY'?'color:#22c55e;border-color:#22c55e40;background:#052e16':'color:#ef4444;border-color:#ef444440;background:#2d0707'"
+                    x-text="sig.setup"></span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:5px">
+              <div><div class="lbl">Entry</div><div style="font-weight:700;color:#f59e0b;font-size:11px" x-text="(sig.entry||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+              <div><div class="lbl">SL</div><div style="font-weight:700;color:#ef4444;font-size:11px" x-text="(sig.stop_loss||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+              <div><div class="lbl">TP</div><div style="font-weight:700;color:#22c55e;font-size:11px" x-text="(sig.take_profit||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+            </div>
+            <div x-show="price.price">
+              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+                <span style="color:var(--muted)">Distance</span>
+                <span style="font-weight:700" :style="'color:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#f59e0b')"
+                      x-text="price.price?(Math.abs(price.price-sig.entry)).toFixed(1)+' pts':''"></span>
+              </div>
+              <div class="dist-bar"><div class="dist-fill" :style="'width:'+Math.min(100,Math.max(0,100-Math.abs(price.price-sig.entry)/(sig.atr||50)*20))+'%;background:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#f59e0b')"></div></div>
+              <div style="font-size:9px;margin-top:2px" :style="'color:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#64748b')" x-text="sigStatus(sig)"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ── 1h SIGNAL PANEL ──────────────────────────────────────────── -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;cursor:pointer;background:var(--card);border-bottom:1px solid var(--border)" @click="toggleSig('h1')">
+        <div style="width:8px;height:8px;border-radius:50%;background:#a855f7;flex-shrink:0" :style="showSig.h1?'opacity:1':'opacity:.3'"></div>
+        <span style="font-weight:700;color:#a855f7;font-size:11px">1h Signals</span>
+        <span class="badge" style="background:#a855f720;color:#a855f7;border-color:#a855f740" x-text="sig1h.length+' signal'+(sig1h.length!==1?'s':'')"></span>
+        <div style="flex:1"></div>
+        <span style="font-size:9px;color:var(--muted)" x-text="showSig.h1?'▾ visible':'▸ hidden'"></span>
+      </div>
+      <div x-show="showSig.h1" style="padding:8px">
+        <div x-show="sig1h.length===0" style="text-align:center;padding:16px 0;color:var(--muted);font-size:11px">No 1h signals — run ⚡ Analyze</div>
+        <template x-for="(sig,i) in bestSig(sig1h)" :key="i">
+          <div class="sig" style="margin-bottom:5px"
+               :class="[sig.direction==='BUY'?'sig-b':'sig-s', price.price&&Math.abs(price.price-sig.entry)<(sig.atr||50)*0.4?'near-entry':'']">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <div style="display:flex;align-items:center;gap:5px">
+                <span class="badge" :class="sig.direction==='BUY'?'bg':'br'" x-text="sig.direction"></span>
+                <span style="font-weight:700" :style="'color:'+(sig.direction==='BUY'?'#22c55e':'#ef4444')" x-text="sig.confidence+'%'"></span>
+              </div>
+              <span style="font-size:10px;color:var(--muted)" x-text="'RR '+sig.risk_reward+':1'"></span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:5px">
+              <div><div class="lbl">Entry</div><div style="font-weight:700;color:#a855f7;font-size:11px" x-text="(sig.entry||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+              <div><div class="lbl">SL</div><div style="font-weight:700;color:#ef4444;font-size:11px" x-text="(sig.stop_loss||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+              <div><div class="lbl">TP</div><div style="font-weight:700;color:#22c55e;font-size:11px" x-text="(sig.take_profit||0).toLocaleString('en-US',{maximumFractionDigits:1})"></div></div>
+            </div>
+            <div x-show="price.price">
+              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+                <span style="color:var(--muted)">Distance</span>
+                <span style="font-weight:700" :style="'color:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#f59e0b')"
+                      x-text="price.price?(Math.abs(price.price-sig.entry)).toFixed(1)+' pts':''"></span>
+              </div>
+              <div class="dist-bar"><div class="dist-fill" :style="'width:'+Math.min(100,Math.max(0,100-Math.abs(price.price-sig.entry)/(sig.atr||50)*20))+'%;background:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#f59e0b')"></div></div>
+              <div style="font-size:9px;margin-top:2px" :style="'color:'+(Math.abs(price.price-sig.entry)<(sig.atr||50)*0.3?'#22c55e':'#64748b')" x-text="sigStatus(sig)"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ── MANAGED SIGNALS (30-min window) ──────────────────────────────── -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--border);cursor:pointer" @click="tab='managed';$el.closest('#layout').querySelector('.scr').scrollTop=9999">
+        <div style="width:8px;height:8px;border-radius:50%;background:#06b6d4;flex-shrink:0"
+             :style="managedSignals.filter(s=>s.status==='ACTIVE').length?'opacity:1':'opacity:.4'"></div>
+        <span style="font-weight:700;color:#06b6d4;font-size:11px">30-Min Window</span>
+        <span class="badge" style="background:#06b6d420;color:#06b6d4;border-color:#06b6d440"
+              x-text="managedSignals.filter(s=>s.status==='ACTIVE').length+' active / '+managedSignals.length+' total'"></span>
+        <div style="flex:1"></div>
+        <span style="font-size:9px;color:var(--muted)" x-text="winRemain(signalStats)"></span>
+      </div>
+      <div style="padding:8px">
+        <!-- Window progress -->
+        <div x-show="signalStats.window_elapsed_pct!=null" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-bottom:3px">
+            <span x-text="'Win rate: '+(signalStats.win_rate_pct||0)+'% ('+signalStats.tp_hits+'W/'+signalStats.sl_hits+'L)'"></span>
+            <span x-text="'ADX '+(regime.adx||0).toFixed(0)"></span>
+          </div>
+          <div class="conf-bar">
+            <div class="conf-fill" :style="'width:'+Math.round((signalStats.window_elapsed_pct||0)*100)+'%;background:'+((signalStats.window_elapsed_pct||0)>0.8?'#ef4444':'#3b82f6')"></div>
+          </div>
+        </div>
+        <div x-show="managedSignals.filter(s=>s.status==='ACTIVE').length===0" style="text-align:center;padding:12px;color:var(--muted);font-size:11px">
+          No active signals — run ⚡ Analyze
+        </div>
+        <template x-for="sig in managedSignals.filter(s=>s.status==='ACTIVE')" :key="sig.id">
+          <div class="msig" :class="sig.direction==='BUY'?'msig-b':'msig-s'">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+              <div style="display:flex;gap:5px;align-items:center">
+                <span class="badge" :class="sig.direction==='BUY'?'bg':'br'" x-text="sig.direction"></span>
+                <span style="font-size:10px;font-weight:700;opacity:.9" :style="'color:'+(sig.direction==='BUY'?'#22c55e':'#ef4444')" x-text="sig.setup"></span>
+              </div>
+              <span style="font-size:10px;color:var(--muted)" x-text="winRemain(sig)+' left'"></span>
+            </div>
+            <!-- Confidence with trend -->
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+              <span style="font-size:20px;font-weight:700" :style="'color:'+confColor(sig.current_confidence)"
+                    x-text="sig.current_confidence+'%'"></span>
+              <span style="font-size:10px" :style="'color:'+(sig.confidence_change>=0?'#22c55e':'#ef4444')"
+                    x-text="(sig.confidence_change>=0?'▲+':'▼')+sig.confidence_change+' pts'"></span>
+            </div>
+            <div class="conf-bar">
+              <div class="conf-fill" :style="'width:'+sig.current_confidence+'%;background:'+confColor(sig.current_confidence)"></div>
+            </div>
+            <div style="font-size:9px;color:var(--muted);margin-top:3px" x-text="sig.recommendation"></div>
+            <!-- Levels -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px;font-size:10px">
+              <div><div class="lbl">Entry</div><b style="color:var(--c)" x-text="(sig.entry||0).toFixed(1)"></b></div>
+              <div><div class="lbl">SL</div><b style="color:#ef4444" x-text="(sig.stop_loss||0).toFixed(1)"></b></div>
+              <div><div class="lbl">TP</div><b style="color:#22c55e" x-text="(sig.take_profit||0).toFixed(1)"></b></div>
+            </div>
+            <!-- PnL -->
+            <div style="margin-top:5px;font-size:10px;display:flex;gap:8px">
+              <span style="color:var(--muted)">P&L</span>
+              <span style="font-weight:700" :style="'color:'+((sig.pnl_pts||0)>=0?'#22c55e':'#ef4444')"
+                    x-text="((sig.pnl_pts||0)>=0?'+':'')+((sig.pnl_pts||0).toFixed(1))+'pts'"></span>
+              <span style="color:var(--muted)" x-text="'RR '+sig.risk_reward"></span>
+            </div>
+          </div>
+        </template>
+        <!-- Completed signals summary -->
+        <div x-show="managedSignals.filter(s=>s.status!=='ACTIVE').length>0" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+          <div class="lbl" style="margin-bottom:4px">Resolved</div>
+          <template x-for="sig in managedSignals.filter(s=>s.status!=='ACTIVE')" :key="sig.id">
+            <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:10px;border-bottom:1px solid var(--border)">
+              <span :style="'color:'+(sig.direction==='BUY'?'#22c55e':'#ef4444')" x-text="sig.direction+' '+sig.setup"></span>
+              <span :class="sig.status==='TP_HIT'?'bg':sig.status==='SL_HIT'?'br':'bx'" class="badge" style="font-size:9px" x-text="sig.status"></span>
+              <span :style="'color:'+((sig.pnl_pts||0)>=0?'#22c55e':'#ef4444')" x-text="((sig.pnl_pts||0)>=0?'+':'')+((sig.pnl_pts||0).toFixed(1))+'pts'"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REGIME + SESSION ──────────────────────────────────────────────── -->
+    <div class="card" x-show="regime.regime||session.session">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <span x-show="regime.regime" class="badge" :class="regimeBadge(regime.regime)" style="font-size:11px"
+              x-text="(regime.regime||'').replace('_',' ')"></span>
+        <span x-show="session.session" class="badge" :class="sessionBadge(session.session)"
+              x-text="session.label||session.session"></span>
+        <span x-show="!session.tradeable" class="badge br" style="font-size:9px">⚠ LOW VOL</span>
+      </div>
+      <!-- Regime probabilities -->
+      <div x-show="regime.regime" style="margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;text-align:center;margin-bottom:5px">
+          <div style="background:var(--card);border-radius:6px;padding:5px">
+            <div class="lbl">Trend</div>
+            <div style="font-weight:700;color:#22c55e" x-text="(regime.continuation_prob||0)+'%'"></div>
+          </div>
+          <div style="background:var(--card);border-radius:6px;padding:5px">
+            <div class="lbl">Reversal</div>
+            <div style="font-weight:700" :style="'color:'+((regime.reversal_prob||0)>=50?'#ef4444':'#f59e0b')"
+                 x-text="(regime.reversal_prob||0)+'%'"></div>
+          </div>
+          <div style="background:var(--card);border-radius:6px;padding:5px">
+            <div class="lbl">Pullback</div>
+            <div style="font-weight:700;color:#f59e0b" x-text="(regime.pullback_prob||0)+'%'"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;font-size:10px">
+          <div><div class="lbl">ADX</div><b :style="'color:'+(regime.adx>=25?'#22c55e':'#64748b')" x-text="(regime.adx||0).toFixed(0)"></b></div>
+          <div><div class="lbl">DI+</div><b style="color:#22c55e" x-text="(regime.di_plus||0).toFixed(0)"></b></div>
+          <div><div class="lbl">DI−</div><b style="color:#ef4444" x-text="(regime.di_minus||0).toFixed(0)"></b></div>
+        </div>
+      </div>
+      <!-- Session notes -->
+      <div x-show="session.notes" style="font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:6px" x-text="session.notes"></div>
+      <!-- Preferred setups -->
+      <div x-show="(regime.preferred_setups||[]).length" style="margin-top:6px">
+        <div class="lbl" style="margin-bottom:3px">Preferred</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px">
+          <template x-for="s in regime.preferred_setups||[]" :key="s">
+            <span class="badge bg" style="font-size:9px" x-text="s"></span>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── KEY S&R LEVELS ────────────────────────────────────────────────── -->
+    <div class="card" x-show="(sr.key_levels||[]).length">
+      <div style="font-weight:700;color:var(--c);margin-bottom:8px">Key S&R Levels</div>
+      <template x-for="lvl in (sr.key_levels||[]).slice(0,10)" :key="lvl.price">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px">
+          <span style="font-weight:700" :style="'color:'+(lvl.side==='resistance'?'#ef4444':'#22c55e')" x-text="lvl.label"></span>
+          <span style="font-weight:700;color:var(--c)" x-text="(lvl.price||0).toLocaleString('en-US',{maximumFractionDigits:0})"></span>
+          <div style="display:flex;gap:1px">
+            <template x-for="i in (lvl.strength||0)" :key="i"><span style="color:#f59e0b;font-size:9px">★</span></template>
+          </div>
+          <span style="color:var(--muted);font-size:9px" x-text="price.price?Math.abs(price.price-(lvl.price||0)).toFixed(0)+'p':''"></span>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── TOP REVERSAL ZONES ─────────────────────────────────────────────── -->
+    <div class="card" x-show="revZones.length">
+      <div style="font-weight:700;color:var(--p);margin-bottom:8px">Top Reversal Zones</div>
+      <template x-for="z in revZones.slice(0,4)" :key="z.price">
+        <div class="rev-zone-card" :style="z.direction==='UP'?'border-color:#22c55e20;background:#05180d':'border-color:#ef444420;background:#180505'">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span style="font-size:11px;font-weight:700" :style="z.direction==='UP'?'color:#22c55e':'color:#ef4444'"
+                  x-text="z.direction==='UP'?'▲ Bounce Zone':'▼ Reject Zone'"></span>
+            <span class="badge" :class="z.score>=12?'bp':z.score>=8?'br':'by'" x-text="z.strength+' · score='+z.score"></span>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--c)" x-text="(z.price||0).toLocaleString('en-US',{maximumFractionDigits:0})"></div>
+          <div style="font-size:9px;color:var(--muted);margin-top:3px" x-text="(z.confluences||[]).slice(0,4).join(' · ')"></div>
+          <div x-show="price.price" style="margin-top:4px">
+            <div style="font-size:9px" :style="Math.abs((z.price||0)-price.price)<(analysis.indicators?.atr||50)*0.5?'color:#f59e0b;font-weight:700':'color:var(--muted)'"
+                 x-text="price.price?Math.abs((z.price||0)-price.price).toFixed(0)+' pts away':''"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- AI ANALYSIS -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-weight:700;color:var(--p)">🤖 AI (Groq)</span>
+        <span class="badge" :class="aiBadge(newsAnalysis.sentiment_label)" x-text="newsAnalysis.sentiment_label||'LOADING'"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div><div class="lbl">Direction</div>
+          <div style="font-size:16px;font-weight:700" :style="'color:'+(newsAnalysis.direction_bias==='UP'?'#22c55e':newsAnalysis.direction_bias==='DOWN'?'#ef4444':'#f59e0b')"
+               x-text="newsAnalysis.direction_bias||'—'"></div></div>
+        <div><div class="lbl">Confidence</div>
+          <div style="font-size:16px;font-weight:700" x-text="(newsAnalysis.direction_confidence||0)+'%'"></div></div>
+        <div><div class="lbl">Volatility</div>
+          <div style="font-weight:700" :style="'color:'+(newsAnalysis.volatility_expected==='HIGH'||newsAnalysis.volatility_expected==='EXTREME'?'#ef4444':'#f59e0b')"
+               x-text="newsAnalysis.volatility_expected||'—'"></div></div>
+        <div><div class="lbl">Vol +%</div>
+          <div style="font-weight:700;color:var(--y)" x-text="(newsAnalysis.volatility_increase_pct||0)+'%'"></div></div>
+      </div>
+      <!-- Range estimate -->
+      <div x-show="newsAnalysis.price_range_estimate" style="background:var(--card);border-radius:8px;padding:10px;margin-bottom:10px">
+        <div class="lbl" style="margin-bottom:6px">Expected Price Range</div>
+        <div style="display:flex;justify-content:space-around">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:#ef4444">DOWN</div>
+            <div style="font-weight:700;color:#ef4444" x-text="(newsAnalysis.price_range_estimate?.low_pct||0)+'%'"></div>
+            <div style="font-size:9px;color:var(--muted)" x-text="price.price?Math.round(price.price*(1+(newsAnalysis.price_range_estimate?.low_pct||0)/100)).toLocaleString():''"></div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:#22c55e">UP</div>
+            <div style="font-weight:700;color:#22c55e" x-text="'+'+(newsAnalysis.price_range_estimate?.high_pct||0)+'%'"></div>
+            <div style="font-size:9px;color:var(--muted)" x-text="price.price?Math.round(price.price*(1+(newsAnalysis.price_range_estimate?.high_pct||0)/100)).toLocaleString():''"></div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--muted);margin-top:5px" x-text="'Horizon: '+(newsAnalysis.time_horizon||'—')"></div>
+      </div>
+      <!-- Themes -->
+      <div x-show="(newsAnalysis.key_themes||[]).length" style="margin-bottom:8px">
+        <div class="lbl" style="margin-bottom:4px">Key Themes</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <template x-for="t in newsAnalysis.key_themes||[]" :key="t">
+            <span class="badge bb" x-text="t"></span>
+          </template>
+        </div>
+      </div>
+      <!-- Reasoning -->
+      <div x-show="newsAnalysis.reasoning" style="font-size:10px;color:var(--muted);line-height:1.6;margin-bottom:8px" x-text="newsAnalysis.reasoning"></div>
+      <!-- Warnings -->
+      <div x-show="(newsAnalysis.risk_warnings||[]).length" style="margin-bottom:8px">
+        <div class="lbl" style="margin-bottom:3px">⚠ Risks</div>
+        <template x-for="w in newsAnalysis.risk_warnings||[]" :key="w">
+          <div style="font-size:10px;color:#f59e0b;padding:2px 0" x-text="'• '+w"></div>
+        </template>
+      </div>
+      <div x-show="newsAnalysis.trading_notes" style="font-size:10px;color:var(--b);margin-bottom:6px">📝 <span x-text="newsAnalysis.trading_notes"></span></div>
+      <div style="font-size:10px;color:var(--muted)" x-text="'Source: '+(newsAnalysis.source||'—')+' · '+(newsAnalysis.news_count||0)+' articles'"></div>
+    </div>
+
+    <!-- MARKET STRUCTURE -->
+    <div class="card">
+      <div style="font-weight:700;color:var(--y);margin-bottom:10px">🏗 Market Structure (SMC)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div class="lbl">Structure</div>
+          <span style="font-weight:700" :style="'color:'+(smc.market_structure?.trend==='BULLISH'?'#22c55e':smc.market_structure?.trend==='BEARISH'?'#ef4444':'#f59e0b')"
+                x-text="smc.market_structure?.trend||'—'"></span></div>
+        <div><div class="lbl">Delta Trend</div>
+          <span style="font-weight:700" :style="'color:'+((analysis.institutional?.cum_delta||0)>0?'#22c55e':'#ef4444')"
+                x-text="analysis.institutional?.delta_trend||'—'"></span></div>
+      </div>
+      <!-- BOS -->
+      <div x-show="smc.market_structure?.bos" style="background:#05180d;border:1px solid #22c55e20;border-radius:6px;padding:7px;margin-bottom:5px">
+        <div style="font-weight:700;color:#22c55e;font-size:11px" x-text="smc.market_structure?.bos?.type"></div>
+        <div style="font-size:10px;color:var(--muted)" x-text="smc.market_structure?.bos?.description"></div>
+      </div>
+      <!-- CHoCH -->
+      <div x-show="smc.market_structure?.choch" style="background:#180505;border:1px solid #ef444420;border-radius:6px;padding:7px;margin-bottom:5px">
+        <div style="font-weight:700;color:#ef4444;font-size:11px" x-text="smc.market_structure?.choch?.type"></div>
+        <div style="font-size:10px;color:var(--muted)" x-text="smc.market_structure?.choch?.description"></div>
+      </div>
+      <!-- Order Blocks -->
+      <div style="margin-bottom:8px">
+        <div class="lbl" style="margin-bottom:5px">🏦 Order Blocks</div>
+        <div x-show="(smc.order_blocks||[]).length===0" style="font-size:10px;color:var(--muted)">No active OBs</div>
+        <template x-for="ob in (smc.order_blocks||[]).slice(0,5)" :key="ob.time">
+          <div class="zone" :class="ob.type==='BULLISH'?'zg':'zr'">
+            <span class="badge" :class="ob.type==='BULLISH'?'bg':'br'" x-text="ob.type"></span>
+            <span style="color:var(--muted)" x-text="(ob.low||0).toLocaleString('en-US',{maximumFractionDigits:0})+' – '+(ob.high||0).toLocaleString('en-US',{maximumFractionDigits:0})"></span>
+            <span style="color:var(--muted)" x-text="ob.distance?(ob.distance).toFixed(0)+' pts':''"></span>
+          </div>
+        </template>
+      </div>
+      <!-- FVGs -->
+      <div>
+        <div class="lbl" style="margin-bottom:5px">🔲 Fair Value Gaps</div>
+        <div x-show="(smc.fair_value_gaps||[]).length===0" style="font-size:10px;color:var(--muted)">No unfilled FVGs</div>
+        <template x-for="fvg in (smc.fair_value_gaps||[]).slice(0,5)" :key="fvg.time">
+          <div class="zone" :class="fvg.type==='BULLISH'?'zb':'zp'">
+            <span class="badge" :class="fvg.type==='BULLISH'?'bb':'bp'" x-text="fvg.type"></span>
+            <span style="color:var(--muted)" x-text="(fvg.low||0).toLocaleString('en-US',{maximumFractionDigits:0})+' – '+(fvg.high||0).toLocaleString('en-US',{maximumFractionDigits:0})"></span>
+            <span style="color:var(--muted)" x-text="fvg.distance?(fvg.distance).toFixed(0)+' pts':''"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- VOLUME PROFILE -->
+    <div class="card">
+      <div style="font-weight:700;color:var(--p);margin-bottom:8px">📊 Volume Profile</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+        <div><div class="lbl">POC</div><div style="font-weight:700;color:#f59e0b" x-text="analysis.institutional?.volume_profile?.poc?analysis.institutional.volume_profile.poc.toLocaleString('en-US',{maximumFractionDigits:0}):'—'"></div></div>
+        <div><div class="lbl">VAH</div><div style="font-weight:700;color:#22c55e" x-text="analysis.institutional?.volume_profile?.vah?analysis.institutional.volume_profile.vah.toLocaleString('en-US',{maximumFractionDigits:0}):'—'"></div></div>
+        <div><div class="lbl">VAL</div><div style="font-weight:700;color:#ef4444" x-text="analysis.institutional?.volume_profile?.val?analysis.institutional.volume_profile.val.toLocaleString('en-US',{maximumFractionDigits:0}):'—'"></div></div>
+      </div>
+      <canvas id="vol-canvas" style="width:100%;height:130px;display:block"></canvas>
+    </div>
+
+    <!-- INSTITUTIONAL CANDLES -->
+    <div class="card">
+      <div style="font-weight:700;color:var(--p);margin-bottom:8px">🏛 Institutional Activity</div>
+      <div x-show="(analysis.institutional?.institutional_candles||[]).length===0" style="font-size:10px;color:var(--muted)">No spikes detected</div>
+      <template x-for="ic in (analysis.institutional?.institutional_candles||[]).slice(-6).reverse()" :key="ic.time">
+        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px">
+          <span style="color:var(--muted)" x-text="(ic.time||'').substring(11,16)"></span>
+          <span :style="'color:'+(ic.direction==='BUY'?'#22c55e':'#ef4444')" x-text="ic.direction"></span>
+          <span style="color:#f59e0b" x-text="ic.volume_ratio+'x'"></span>
+          <span x-text="(ic.price||0).toLocaleString('en-US',{maximumFractionDigits:0})"></span>
+        </div>
+      </template>
+    </div>
+
+    <!-- ── ADAPTIVE LEARNER PANEL ─────────────────────────────────────────── -->
+    <div class="card" style="padding:10px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#06b6d4" :style="learner.total_resolved>0?'opacity:1':'opacity:.35 animation:pulse 2s infinite'"></div>
+        <span style="font-weight:700;color:#06b6d4;font-size:11px">AI Self-Learning</span>
+        <span style="font-size:9px;color:var(--muted)" x-text="learner.total_resolved+' resolved / '+learner.total_signals+' tracked'"></span>
+      </div>
+      <!-- Overall stats -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+        <div style="background:var(--card);border-radius:6px;padding:6px;text-align:center">
+          <div class="lbl">Win Rate</div>
+          <div style="font-weight:700;font-size:14px;margin-top:2px"
+               :style="'color:'+(learner.overall_win_rate>=60?'#22c55e':learner.overall_win_rate>=50?'#f59e0b':'#ef4444')"
+               x-text="learner.overall_win_rate!=null?learner.overall_win_rate+'%':'—'"></div>
+        </div>
+        <div style="background:var(--card);border-radius:6px;padding:6px;text-align:center">
+          <div class="lbl">P&L (pts)</div>
+          <div style="font-weight:700;font-size:14px;margin-top:2px"
+               :style="'color:'+((learner.recent_pnl_pts||0)>=0?'#22c55e':'#ef4444')"
+               x-text="((learner.recent_pnl_pts||0)>=0?'+':'')+((learner.recent_pnl_pts||0).toFixed(0))"></div>
+        </div>
+        <div style="background:var(--card);border-radius:6px;padding:6px;text-align:center">
+          <div class="lbl">Pending</div>
+          <div style="font-weight:700;font-size:14px;margin-top:2px;color:var(--y)"
+               x-text="learner.total_pending||0"></div>
+        </div>
+      </div>
+      <!-- Per-setup stats -->
+      <div class="lbl" style="margin-bottom:5px">Setup Performance</div>
+      <div x-show="!learner.setup_stats||Object.keys(learner.setup_stats).length===0"
+           style="font-size:10px;color:var(--muted);text-align:center;padding:8px 0">
+        Learning... needs 5+ resolved signals per setup
+      </div>
+      <template x-for="[setup, stats] in Object.entries(learner.setup_stats||{})" :key="setup">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:10px;font-weight:600" x-text="setup"></div>
+            <div style="font-size:9px;color:var(--muted)" x-text="(stats.recent_sample||stats.total||0)+' signals'"></div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;font-weight:700"
+                 :style="'color:'+((stats.recent_win_rate||stats.win_rate||0)>=60?'#22c55e':(stats.recent_win_rate||stats.win_rate||0)>=50?'#f59e0b':'#ef4444')"
+                 x-text="(stats.recent_win_rate||stats.win_rate||0)+'%'"></div>
+            <div style="font-size:9px;color:var(--muted)"
+                 x-text="(stats.wins||0)+'W / '+(stats.losses||0)+'L'"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+  </div><!-- end right -->
+</div><!-- end layout -->
+
+<script>
+// ══ Chart Manager — outside Alpine to avoid reactivity corruption ═════════════
+const CM = {
+  chart:null, candle:null, vwap:null, ema9:null, ema21:null, ema50:null, bbU:null, bbL:null,
+  delta:null, lines:[],
+  tz: 'UTC',
+  inds:{vwap:false,ema9:false,ema21:false,ema50:false,bb:false,ob:false,fvg:false,poc:false}, count:0,
+  sessions:{premarket:true,market:true,lunch:false,afterhours:false,night:false},
+  sessionCanvas:null, sessionCtx:null,
+  // ── Drawing tools state ──
+  drawings:[], activeTool:'cursor', _isDrawing:false, _drawStart:null,
+  _mousePos:null, _candleData:[], _drawId:0,
+  _toolColors:{hline:'#f59e0b',vline:'#64748b',trendline:'#3b82f6',ray:'#06b6d4',rect:'#a855f7',fib:'#22c55e'},
+  // Selection & drag state
+  _selectedId:null, _dragMode:null, _dragHandleIdx:null,
+  _dragStartMouse:null, _dragStartPts:null, _hoverDrawingId:null,
+  // Per-TF signal lines on chart
+  sigLines:{m5:[],h1:[]},
+  showSig:{m5:true,h1:true},
+  // readiness gate — set to true after init() completes
+  ready: false,
+  // stores analysis data that arrived before chart was ready
+  pendingUpdate: null,
+  // live bar tracking for tick-by-tick candle updates
+  _lastBar: null,
+
+  init() {
+    const el = document.getElementById('chart');
+
+    const W = el.offsetWidth  || 900;
+    const H = el.offsetHeight || 500;
+
+    console.log('[CM] chart container:', W, 'x', H);
+
+    this.chart = LightweightCharts.createChart(el, {
+      layout:{ background:{color:'#0b0f1a'}, textColor:'#64748b' },
+      grid:{ vertLines:{color:'#1a2235'}, horzLines:{color:'#1a2235'} },
+      crosshair:{ mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale:{ borderColor:'#1e2d45' },
+      timeScale:{ borderColor:'#1e2d45', timeVisible:true, secondsVisible:false },
+      width: W, height: H,
+    });
+
+    this.candle = this.chart.addCandlestickSeries({
+      upColor:'#22c55e', downColor:'#ef4444',
+      borderUpColor:'#22c55e', borderDownColor:'#ef4444',
+      wickUpColor:'#22c55e', wickDownColor:'#ef4444',
+      priceScaleId: 'right',
+    });
+    // Candles occupy top 78% of chart height
+    this.chart.priceScale('right').applyOptions({
+      scaleMargins: { top: 0.05, bottom: 0.22 },
+    });
+
+    this.vwap  = this.chart.addLineSeries({ color:'#06b6d4', lineWidth:2, title:'VWAP', lastValueVisible:true,  priceLineVisible:false, priceScaleId:'right' });
+    this.ema9  = this.chart.addLineSeries({ color:'#f59e0b', lineWidth:1, title:'EMA9',  lastValueVisible:false, priceLineVisible:false, priceScaleId:'right' });
+    this.ema21 = this.chart.addLineSeries({ color:'#e06c75', lineWidth:1, title:'EMA21', lastValueVisible:false, priceLineVisible:false, priceScaleId:'right' });
+    this.ema50 = this.chart.addLineSeries({ color:'#56b6c2', lineWidth:1, title:'EMA50', lastValueVisible:false, priceLineVisible:false, priceScaleId:'right' });
+    this.bbU   = this.chart.addLineSeries({ color:'#334155', lineWidth:1, lineStyle:1,   lastValueVisible:false, priceLineVisible:false, priceScaleId:'right' });
+    this.bbL   = this.chart.addLineSeries({ color:'#334155', lineWidth:1, lineStyle:1,   lastValueVisible:false, priceLineVisible:false, priceScaleId:'right' });
+
+    // Delta histogram in the bottom 20% of the same chart
+    this.delta = this.chart.addHistogramSeries({
+      priceScaleId: 'delta',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    this.chart.priceScale('delta').applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+      borderVisible: false,
+    });
+
+    // Resize chart when window changes size
+    window.addEventListener('resize', () => {
+      this.chart?.resize(el.offsetWidth, el.offsetHeight);
+    });
+
+    // Initialize canvas drawing overlay
+    this._initDrawing();
+
+    // Initialize session background canvas
+    this.initSessions();
+
+    // Apply default timezone formatting
+    this.applyTz(this.tz);
+
+    // Mark chart as ready, then flush any pending update that arrived before init
+    this.ready = true;
+    console.log('[CM] ready');
+    if (this.pendingUpdate) {
+      console.log('[CM] flushing pending update');
+      this.update(this.pendingUpdate);
+      this.pendingUpdate = null;
+    }
+  },
+
+  setCandles(raw) {
+    if (!this.candle || !raw?.length) return;
+    const sorted = [...raw].sort((a,b)=>a.time-b.time);
+    const out = []; let last=-1;
+    for (const c of sorted) {
+      if (c.time>0 && c.time!==last && c.open!=null && c.close!=null) {
+        out.push({time:c.time, open:+c.open, high:+c.high, low:+c.low, close:+c.close});
+        last = c.time;
+      }
+    }
+    if (!out.length) return;
+    try {
+      this.candle.setData(out);
+      this.count = out.length;
+      this._candleData = out;          // store for drawing coordinate lookups
+      this.chart.timeScale().fitContent();
+      // Seed live-bar tracker with the last completed candle
+      this._lastBar = {...out[out.length - 1]};
+    } catch(e){ console.error('setData:',e,out[0]); }
+
+    const cl = out.map(c=>c.close);
+    if (this.inds.ema9 && out.length>9) this.ema9.setData(this._ema(out,cl,9)); else this.ema9.setData([]);
+    if (this.inds.ema21 && out.length>21) this.ema21.setData(this._ema(out,cl,21)); else this.ema21.setData([]);
+    if (this.inds.ema50 && out.length>50) this.ema50.setData(this._ema(out,cl,50)); else this.ema50.setData([]);
+    if (this.inds.bb && out.length>=20) {
+      const bb=this._bb(out,20,2);
+      this.bbU.setData(bb.map(b=>({time:b.time,value:b.u})));
+      this.bbL.setData(bb.map(b=>({time:b.time,value:b.l})));
+    } else { this.bbU.setData([]); this.bbL.setData([]); }
+  },
+
+  setVwap(series) {
+    if (!this.vwap) return;
+    if (!this.inds.vwap||!series?.length) { this.vwap.setData([]); return; }
+    const out=[]; let last=-1;
+    for (const v of series.filter(x=>x.value!=null)
+        .map(v=>({time:Math.floor(new Date(v.time).getTime()/1000),value:+v.value}))
+        .sort((a,b)=>a.time-b.time)) {
+      if (v.time>0&&v.time!==last) { out.push(v); last=v.time; }
+    }
+    try { if(out.length) this.vwap.setData(out); } catch(e){}
+  },
+
+  setDelta(series) {
+    if (!this.delta||!series?.length) return;
+    const out=[]; let last=-1;
+    for (const d of series
+        .map(d=>({time: typeof d.time==='number' ? d.time : Math.floor(new Date(d.time+'Z').getTime()/1000), value: d.value||0, color: d.color}))
+        .sort((a,b)=>a.time-b.time)) {
+      if (d.time>0&&d.time!==last) { out.push(d); last=d.time; }
+    }
+    try { if(out.length) this.delta.setData(out); } catch(e){ console.error('setDelta:',e); }
+  },
+
+  drawZones(analysis) {
+    for (const l of this.lines) { try{this.candle.removePriceLine(l);}catch(e){} }
+    this.lines=[];
+    const D=LightweightCharts.LineStyle;
+    const add=(price,color,style,title,vis=true,lw=1)=>{
+      try{ this.lines.push(this.candle.createPriceLine({price,color,lineWidth:lw,lineStyle:style,axisLabelVisible:vis,title})); }catch(e){}
+    };
+    if (this.inds.ob) {
+      (analysis.smc?.order_blocks||[]).slice(0,4).forEach(ob=>{
+        const c=ob.type==='BULLISH'?'#22c55e':'#ef4444';
+        add(ob.high,c,D.Dashed,ob.type==='BULLISH'?'⬆OB':'⬇OB');
+        add(ob.low, c,D.Dashed,'');
+      });
+    }
+    if (this.inds.fvg) {
+      (analysis.smc?.fair_value_gaps||[]).slice(0,3).forEach(f=>{
+        const c=f.type==='BULLISH'?'#3b82f6':'#a855f7';
+        add(f.high,c,D.Dotted,'FVG',false); add(f.low,c,D.Dotted,'',false);
+      });
+    }
+    const poc=analysis.institutional?.volume_profile?.poc;
+    if(poc && this.inds.poc) add(poc,'#f59e0b',D.SparseDotted,'POC');
+    // Key S&R levels
+    if (this.inds.sr) {
+      (analysis.support_resistance?.key_levels||[]).slice(0,10).forEach(lvl=>{
+        const c=lvl.side==='resistance'?'#ef4444':'#22c55e';
+        const alpha=Math.min(99, 40+(lvl.strength||0)*12);
+        add(lvl.price, c+''+alpha.toString(16), D.Dashed, lvl.label, true);
+      });
+    }
+    // BOS / CHoCH price markers
+    if (this.inds.bos) {
+      const bos=analysis.smc?.market_structure?.bos;
+      const choch=analysis.smc?.market_structure?.choch;
+      if(bos?.price) add(bos.price,'#22c55e',D.Solid,'BOS',true,2);
+      if(choch?.price) add(choch.price,'#ef4444',D.Solid,'CHoCH',true,2);
+    }
+    // Top reversal zones
+    if (this.inds.sweep) {
+      (analysis.reversal_zones||[]).slice(0,4).forEach(z=>{
+        add(z.price,'#a855f7',D.SparseDotted,z.strength+' Rev',true);
+      });
+    }
+  },
+
+  // Draw signal entry/SL/TP lines per TF — pass null to skip updating that TF
+  drawSigLines(sig5m, sig1h) {
+    if (!this.candle) return;
+    const D = LightweightCharts.LineStyle;
+    const tfCfg = [
+      {key:'m5', sigs:sig5m, color:'#f59e0b', label:'5m'},
+      {key:'h1', sigs:sig1h, color:'#a855f7', label:'1h'},
+    ];
+    for (const {key, sigs, color, label} of tfCfg) {
+      if (sigs === null) continue;  // skip — don't touch this TF's lines
+      // Remove old lines for this TF
+      for (const l of this.sigLines[key]) { try{this.candle.removePriceLine(l);}catch(e){} }
+      this.sigLines[key] = [];
+      if (!this.showSig[key] || !sigs?.length) continue;
+      for (const sig of sigs.slice(0,3)) {
+        const dir = sig.direction==='BUY'?'▲':'▼';
+        const add = (price, c, style, title) => {
+          try {
+            const l = this.candle.createPriceLine({price,color:c,lineWidth:1,lineStyle:style,axisLabelVisible:true,title});
+            this.sigLines[key].push(l);
+          } catch(e) {}
+        };
+        add(sig.entry,        color,     D.Dashed,  `${dir}${label}`);
+        add(sig.stop_loss,    '#ef4444', D.Dotted,  '');
+        add(sig.take_profit,  '#22c55e', D.Dotted,  '');
+      }
+    }
+  },
+
+  // ══ SESSION BACKGROUNDS ════════════════════════════════════════════════════
+
+  // Returns true if the given UTC millisecond timestamp falls in US DST (EDT)
+  _isUSDST(utcMs) {
+    const d = new Date(utcMs);
+    const y = d.getUTCFullYear();
+    // Second Sunday of March at 07:00 UTC (= 2:00 AM EST → clocks spring forward)
+    const m3 = new Date(Date.UTC(y, 2, 1));
+    const dstStart = new Date(Date.UTC(y, 2, 8 + (7 - m3.getUTCDay()) % 7, 7));
+    // First Sunday of November at 06:00 UTC (= 2:00 AM EDT → clocks fall back)
+    const m11 = new Date(Date.UTC(y, 10, 1));
+    const dstEnd = new Date(Date.UTC(y, 10, 1 + (7 - m11.getUTCDay()) % 7, 6));
+    return d >= dstStart && d < dstEnd;
+  },
+
+  initSessions() {
+    const box = document.getElementById('chart-box');
+    const canvas = document.createElement('canvas');
+    canvas.id = 'session-canvas';
+    // Insert before the draw-canvas so it sits at a lower z-index layer
+    const dc = document.getElementById('draw-canvas');
+    box.insertBefore(canvas, dc);
+    this.sessionCanvas = canvas;
+    this.sessionCtx = canvas.getContext('2d');
+
+    const resize = () => {
+      canvas.width  = box.offsetWidth;
+      canvas.height = box.offsetHeight;
+      this.drawSessions();
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    // Redraw whenever the user scrolls or zooms the chart
+    this.chart.timeScale().subscribeVisibleTimeRangeChange(() => this.drawSessions());
+  },
+
+  drawSessions() {
+    const canvas = this.sessionCanvas;
+    const ctx    = this.sessionCtx;
+    if (!canvas || !ctx || !this.chart) return;
+
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const hasAny = Object.values(this.sessions).some(Boolean);
+    if (!hasAny) return;
+
+    const range = this.chart.timeScale().getVisibleRange();
+    if (!range) return;
+
+    // Session visual config (NYSE/NASDAQ, times relative to ET)
+    const DEFS = {
+      night:      { color: '#0f172a', alpha: 0.30, label: ''     },
+      premarket:  { color: '#f59e0b', alpha: 0.07, label: 'PRE'  },
+      market:     { color: '#22c55e', alpha: 0.05, label: 'OPEN' },
+      lunch:      { color: '#94a3b8', alpha: 0.14, label: 'LUNCH'},
+      afterhours: { color: '#3b82f6', alpha: 0.07, label: 'A/H'  },
+    };
+
+    const ONE_DAY = 86400;
+    // Iterate a bit beyond the visible range to cover partial days
+    const startDay = (Math.floor(range.from / ONE_DAY) - 1) * ONE_DAY;
+    const endDay   = (Math.floor(range.to   / ONE_DAY) + 2) * ONE_DAY;
+
+    ctx.save();
+
+    for (let dayTs = startDay; dayTs <= endDay; dayTs += ONE_DAY) {
+      const isDST = this._isUSDST(dayTs * 1000);
+      // Number of seconds to ADD to ET to get UTC (ET is behind UTC)
+      const etOff = (isDST ? 4 : 5) * 3600;
+
+      // All times in UTC seconds:
+      // Pre-market  04:00–09:30 ET
+      const pre_s  = dayTs + etOff + 4   * 3600;
+      const pre_e  = dayTs + etOff + 9.5 * 3600;
+      // Regular market  09:30–16:00 ET
+      const mkt_s  = pre_e;
+      const mkt_e  = dayTs + etOff + 16  * 3600;
+      // Lunch  12:00–13:30 ET
+      const lun_s  = dayTs + etOff + 12  * 3600;
+      const lun_e  = dayTs + etOff + 13.5* 3600;
+      // After hours  16:00–20:00 ET
+      const ah_s   = mkt_e;
+      const ah_e   = dayTs + etOff + 20  * 3600;
+      // Night/closed — two parts of the same UTC day:
+      //   early: UTC 00:00 → pre-market start (covers previous night's end)
+      const nt1_s  = dayTs;
+      const nt1_e  = pre_s;
+      //   late:  after-hours end → UTC midnight next day
+      const nt2_s  = ah_e;
+      const nt2_e  = dayTs + ONE_DAY;
+
+      const segs = [
+        { key: 'night',      s: nt1_s, e: nt1_e },
+        { key: 'premarket',  s: pre_s, e: pre_e  },
+        { key: 'market',     s: mkt_s, e: mkt_e  },
+        { key: 'lunch',      s: lun_s, e: lun_e  },
+        { key: 'afterhours', s: ah_s,  e: ah_e   },
+        { key: 'night',      s: nt2_s, e: nt2_e  },
+      ];
+
+      for (const seg of segs) {
+        if (!this.sessions[seg.key]) continue;
+        const def = DEFS[seg.key];
+
+        const x1 = this.chart.timeScale().timeToCoordinate(seg.s);
+        const x2 = this.chart.timeScale().timeToCoordinate(seg.e);
+        if (x1 === null || x2 === null) continue;
+
+        const rx1 = Math.min(x1, x2);
+        const rx2 = Math.max(x1, x2);
+        if (rx2 < 0 || rx1 > W) continue;
+
+        const bx = Math.max(rx1, 0);
+        const bw = Math.min(rx2, W) - bx;
+        if (bw < 1) continue;
+
+        ctx.globalAlpha = def.alpha;
+        ctx.fillStyle = def.color;
+        ctx.fillRect(bx, 0, bw, H);
+
+        // Subtle label at the very top of the band (only if wide enough)
+        if (def.label && bw > 28) {
+          ctx.globalAlpha = def.alpha * 5;
+          ctx.fillStyle = def.color;
+          ctx.font = '9px Consolas,"SF Mono",monospace';
+          ctx.fillText(def.label, bx + 4, 13);
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  update(analysis) {
+    // If chart is not ready yet, stash data and return — init() will call us again
+    if (!this.ready) {
+      console.log('[CM] not ready, storing pendingUpdate');
+      this.pendingUpdate = analysis;
+      return;
+    }
+    this.setCandles(analysis.candles||[]);
+    this.setVwap(analysis.vwap?.series||[]);
+    this.setDelta(analysis.institutional?.delta_series||[]);
+    this.drawZones(analysis);
+  },
+
+  // ══ DRAWING TOOLS ══════════════════════════════════════════════════════════
+
+  _initDrawing() {
+    const canvas = document.getElementById('draw-canvas');
+    const box    = document.getElementById('chart-box');
+    if (!canvas || !box) return;
+
+    const resize = () => {
+      canvas.width  = box.offsetWidth;
+      canvas.height = box.offsetHeight;
+      this._renderDrawings();
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    canvas.addEventListener('mousedown',    e => this._onMouseDown(e));
+    canvas.addEventListener('mousemove',    e => this._onMouseMove(e));
+    canvas.addEventListener('mouseup',      e => this._onMouseUp(e));
+    canvas.addEventListener('contextmenu',  e => { e.preventDefault(); this._cancelDraw(); });
+
+    // Delete selected drawing with Delete or Backspace key
+    document.addEventListener('keydown', e => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && this._selectedId &&
+          document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        this.deleteSelected();
+      }
+      if (e.key === 'Escape') { this.setTool('cursor'); }
+    });
+
+    // Re-render on scroll / zoom
+    this.chart.timeScale().subscribeVisibleTimeRangeChange(() => this._renderDrawings());
+  },
+
+  setTool(tool) {
+    this.activeTool = tool;
+    const canvas = document.getElementById('draw-canvas');
+    if (!canvas) return;
+    // Both cursor and drawing tools need pointer events; cursor = select/move
+    canvas.style.pointerEvents = 'all';
+    canvas.style.cursor = tool === 'cursor' ? 'default' : 'crosshair';
+    this._isDrawing = false;
+    this._drawStart = null;
+    this._dragMode = null;
+    this._dragHandleIdx = null;
+    if (tool !== 'cursor') {
+      // Deselect when switching to a drawing tool
+      this._selectedId = null;
+    }
+    this._renderDrawings();
+  },
+
+  _cancelDraw() {
+    this._isDrawing = false;
+    this._drawStart = null;
+    this._renderDrawings();
+  },
+
+  _getPos(e) {
+    const r = document.getElementById('draw-canvas').getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  },
+
+  _toData(x, y) {
+    const price   = this.candle.coordinateToPrice(y);
+    const logical = this.chart.timeScale().coordinateToLogical(x);
+    let time = null;
+    if (logical !== null && this._candleData.length) {
+      const idx = Math.max(0, Math.min(Math.round(logical), this._candleData.length - 1));
+      time = this._candleData[idx]?.time ?? null;
+    }
+    return { time, price };
+  },
+
+  _toCoord(time, price) {
+    return {
+      x: this.chart.timeScale().timeToCoordinate(time),
+      y: this.candle.priceToCoordinate(price),
+    };
+  },
+
+  // ── Hit testing helpers ───────────────────────────────────────────────────
+
+  _ptSegDist(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx*dx + dy*dy;
+    if (len2 === 0) return Math.hypot(px-ax, py-ay);
+    const t = Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / len2));
+    return Math.hypot(px - (ax + t*dx), py - (ay + t*dy));
+  },
+
+  // Returns pixel distance from (mx,my) to drawing d, or Infinity if not a hit
+  _hitShape(mx, my, d) {
+    const T = 10;  // px threshold
+    if (d.type === 'hline') {
+      const {y} = this._toCoord(d.pts[0].time, d.pts[0].price);
+      if (y == null) return Infinity;
+      return Math.abs(my - y) <= T ? Math.abs(my - y) : Infinity;
+    }
+    if (d.type === 'vline') {
+      const {x} = this._toCoord(d.pts[0].time, d.pts[0].price);
+      if (x == null) return Infinity;
+      return Math.abs(mx - x) <= T ? Math.abs(mx - x) : Infinity;
+    }
+    if (d.type === 'trendline' || d.type === 'fib') {
+      const c1 = this._toCoord(d.pts[0].time, d.pts[0].price);
+      const c2 = this._toCoord(d.pts[1].time, d.pts[1].price);
+      if (c1.x == null || c2.x == null) return Infinity;
+      const dist = this._ptSegDist(mx, my, c1.x, c1.y, c2.x, c2.y);
+      return dist <= T ? dist : Infinity;
+    }
+    if (d.type === 'ray') {
+      const c1 = this._toCoord(d.pts[0].time, d.pts[0].price);
+      const c2 = this._toCoord(d.pts[1].time, d.pts[1].price);
+      if (c1.x == null || c2.x == null) return Infinity;
+      const W = document.getElementById('draw-canvas')?.width || 9999;
+      const dx = c2.x - c1.x, dy = c2.y - c1.y;
+      const scale = (W * 4) / (Math.sqrt(dx*dx + dy*dy) || 1);
+      const dist = this._ptSegDist(mx, my, c1.x, c1.y, c1.x + dx*scale, c1.y + dy*scale);
+      return dist <= T ? dist : Infinity;
+    }
+    if (d.type === 'rect') {
+      const c1 = this._toCoord(d.pts[0].time, d.pts[0].price);
+      const c2 = this._toCoord(d.pts[1].time, d.pts[1].price);
+      if (c1.x == null || c2.x == null) return Infinity;
+      const rx = Math.min(c1.x, c2.x), ry = Math.min(c1.y, c2.y);
+      const rw = Math.abs(c2.x - c1.x), rh = Math.abs(c2.y - c1.y);
+      const inside = mx >= rx && mx <= rx+rw && my >= ry && my <= ry+rh;
+      if (!inside) return Infinity;
+      const toBorder = Math.min(mx-rx, rx+rw-mx, my-ry, ry+rh-my);
+      return toBorder <= T ? 0 : 5;  // border = priority hit, interior = lower priority
+    }
+    return Infinity;
+  },
+
+  // Returns array of handle objects: {x, y, ptIdx} for a drawing
+  _getHandles(d) {
+    const H = [];
+    if (d.type === 'hline') {
+      // Drag handle: left edge at mid-height of the line
+      const {y} = this._toCoord(d.pts[0].time, d.pts[0].price);
+      if (y != null) H.push({x:36, y, ptIdx:0, axis:'y'});
+    } else if (d.type === 'vline') {
+      const {x} = this._toCoord(d.pts[0].time, d.pts[0].price);
+      if (x != null) H.push({x, y:20, ptIdx:0, axis:'x'});
+    } else {
+      for (let i = 0; i < d.pts.length; i++) {
+        const {x, y} = this._toCoord(d.pts[i].time, d.pts[i].price);
+        if (x != null) H.push({x, y, ptIdx:i, axis:'both'});
+      }
+    }
+    return H;
+  },
+
+  // ── Mouse event handlers ──────────────────────────────────────────────────
+
+  _onMouseDown(e) {
+    const pos = this._getPos(e);
+
+    // ── CURSOR MODE: select / drag ──
+    if (this.activeTool === 'cursor') {
+      // Check handles of the currently selected drawing first
+      const selD = this.drawings.find(d => d.id === this._selectedId);
+      if (selD) {
+        const handles = this._getHandles(selD);
+        for (let i = 0; i < handles.length; i++) {
+          const h = handles[i];
+          if (Math.hypot(pos.x - h.x, pos.y - h.y) <= 10) {
+            // Start dragging this handle
+            this._dragMode = 'handle';
+            this._dragHandleIdx = i;
+            this._dragStartMouse = pos;
+            this._dragStartPts = selD.pts.map(p => ({...p}));
+            return;
+          }
+        }
+      }
+      // Hit-test all drawings (closest wins)
+      let bestId = null, bestDist = Infinity;
+      for (const d of this.drawings) {
+        const dist = this._hitShape(pos.x, pos.y, d);
+        if (dist < bestDist) { bestDist = dist; bestId = d.id; }
+      }
+      if (bestId !== null) {
+        this._selectedId = bestId;
+        const d = this.drawings.find(x => x.id === bestId);
+        this._dragMode = 'move';
+        this._dragStartMouse = pos;
+        this._dragStartPts = d.pts.map(p => ({...p}));
+        document.getElementById('draw-canvas').style.cursor = 'grabbing';
+      } else {
+        // Click on empty space → deselect
+        this._selectedId = null;
+        this._dragMode = null;
+      }
+      this._renderDrawings();
+      return;
+    }
+
+    // ── DRAWING MODE ──
+    const data = this._toData(pos.x, pos.y);
+    if (data.time === null || data.price === null) return;
+
+    if (this.activeTool === 'hline' || this.activeTool === 'vline') {
+      const d = { id:++this._drawId, type:this.activeTool, color:this._toolColors[this.activeTool], lw:1, pts:[data] };
+      this.drawings.push(d);
+      this._selectedId = d.id;
+      this._renderDrawings();
+      return;
+    }
+    if (!this._isDrawing) {
+      this._isDrawing = true;
+      this._drawStart = data;
+    } else {
+      const d = { id:++this._drawId, type:this.activeTool, color:this._toolColors[this.activeTool], lw:1, pts:[this._drawStart, data] };
+      this.drawings.push(d);
+      this._selectedId = d.id;
+      this._isDrawing = false;
+      this._drawStart = null;
+      this._renderDrawings();
+    }
+  },
+
+  _onMouseMove(e) {
+    const pos = this._getPos(e);
+    this._mousePos = pos;
+
+    // ── CURSOR MODE hover & drag ──
+    if (this.activeTool === 'cursor') {
+      const canvas = document.getElementById('draw-canvas');
+
+      if (this._dragMode && this._dragStartMouse) {
+        // Apply drag
+        const d = this.drawings.find(x => x.id === this._selectedId);
+        if (!d) return;
+        const origPts = this._dragStartPts;
+
+        if (this._dragMode === 'move') {
+          // Translate all points by the delta in data space
+          const newData = this._toData(pos.x, pos.y);
+          const origData = this._toData(this._dragStartMouse.x, this._dragStartMouse.y);
+          if (!origData.price || !newData.price) return;
+          const dprice = newData.price - origData.price;
+          const dtimePx = pos.x - this._dragStartMouse.x;
+          d.pts = origPts.map(p => {
+            const origCoord = this._toCoord(p.time, p.price);
+            const newX = (origCoord.x || 0) + dtimePx;
+            const newTime = this._toData(newX, 0).time || p.time;
+            const newType = d.type;
+            // hline: only move price; vline: only move time
+            if (newType === 'hline') return { time: p.time, price: p.price + dprice };
+            if (newType === 'vline') return { time: newTime, price: p.price };
+            return { time: newTime, price: p.price + dprice };
+          });
+
+        } else if (this._dragMode === 'handle') {
+          // Move only the handle's point
+          const handles = this._getHandles({...d, pts: origPts});
+          const h = handles[this._dragHandleIdx];
+          if (!h) return;
+          const newData = this._toData(pos.x, pos.y);
+          if (!newData.price) return;
+          const pt = {...origPts[h.ptIdx]};
+          if (h.axis === 'y' || h.axis === 'both') pt.price = newData.price;
+          if (h.axis === 'x' || h.axis === 'both') pt.time = newData.time || pt.time;
+          d.pts = origPts.map((p, i) => i === h.ptIdx ? pt : {...p});
+        }
+        canvas.style.cursor = 'grabbing';
+        this._renderDrawings();
+        return;
+      }
+
+      // Hover detection for cursor changes
+      const selD = this.drawings.find(d => d.id === this._selectedId);
+      if (selD) {
+        const handles = this._getHandles(selD);
+        for (const h of handles) {
+          if (Math.hypot(pos.x - h.x, pos.y - h.y) <= 10) {
+            canvas.style.cursor = 'grab';
+            this._renderDrawings();
+            return;
+          }
+        }
+      }
+      let hovering = false;
+      for (const d of this.drawings) {
+        if (this._hitShape(pos.x, pos.y, d) < Infinity) { hovering = true; break; }
+      }
+      canvas.style.cursor = hovering ? (this._selectedId ? 'move' : 'pointer') : 'default';
+      this._hoverDrawingId = hovering ? this.drawings.find(d => this._hitShape(pos.x,pos.y,d)<Infinity)?.id : null;
+      this._renderDrawings();
+      return;
+    }
+
+    // Drawing mode ghost
+    if (this._isDrawing) this._renderDrawings();
+  },
+
+  _onMouseUp(e) {
+    if (this._dragMode) {
+      this._dragMode = null;
+      this._dragHandleIdx = null;
+      this._dragStartMouse = null;
+      this._dragStartPts = null;
+      document.getElementById('draw-canvas').style.cursor =
+        this.activeTool === 'cursor' ? 'default' : 'crosshair';
+      this._renderDrawings();
+    }
+  },
+
+  deleteSelected() {
+    if (!this._selectedId) return;
+    this.drawings = this.drawings.filter(d => d.id !== this._selectedId);
+    this._selectedId = null;
+    this._renderDrawings();
+  },
+
+  removeLastDrawing() {
+    this._selectedId = null;
+    this.drawings.pop();
+    this._renderDrawings();
+  },
+
+  clearDrawings() {
+    this.drawings = [];
+    this._selectedId = null;
+    this._isDrawing = false;
+    this._drawStart = null;
+    this._renderDrawings();
+  },
+
+  _renderDrawings() {
+    const canvas = document.getElementById('draw-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const d of this.drawings) {
+      this._drawShape(ctx, d);
+      // Selection highlight
+      if (d.id === this._selectedId) {
+        ctx.save();
+        ctx.strokeStyle = '#60a5fa';
+        ctx.lineWidth = (d.lw || 1) + 2;
+        ctx.setLineDash([5, 4]);
+        ctx.globalAlpha = 0.7;
+        this._drawShape(ctx, {...d, color:'#60a5fa', lw:(d.lw||1)+2});
+        ctx.restore();
+        // Draw handle circles
+        const handles = this._getHandles(d);
+        for (const h of handles) {
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 5, 0, Math.PI*2);
+          ctx.fillStyle = '#1e3a5f';
+          ctx.fill();
+          ctx.strokeStyle = '#60a5fa';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Ghost (in-progress drawing)
+    if (this._isDrawing && this._drawStart && this._mousePos) {
+      const ghost = { type:this.activeTool, color:this._toolColors[this.activeTool]||'#fff', lw:1,
+                      pts:[this._drawStart, this._toData(this._mousePos.x, this._mousePos.y)] };
+      ctx.globalAlpha = 0.55;
+      this._drawShape(ctx, ghost);
+      ctx.globalAlpha = 1;
+    }
+  },
+
+  _drawShape(ctx, d) {
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    ctx.strokeStyle = d.color;
+    ctx.fillStyle   = d.color;
+    ctx.lineWidth   = d.lw || 1;
+    ctx.setLineDash([]);
+    ctx.font = '10px Consolas,monospace';
+
+    if (d.type === 'hline') {
+      const { y } = this._toCoord(d.pts[0].time, d.pts[0].price);
+      if (y == null) return;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.fillText(d.pts[0].price.toFixed(2), W - 62, y - 3);
+
+    } else if (d.type === 'vline') {
+      const { x } = this._toCoord(d.pts[0].time, d.pts[0].price);
+      if (x == null) return;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+
+    } else if (d.type === 'trendline') {
+      const [p1, p2] = d.pts;
+      const c1 = this._toCoord(p1.time, p1.price);
+      const c2 = this._toCoord(p2.time, p2.price);
+      if (c1.x == null || c2.x == null) return;
+      ctx.beginPath(); ctx.moveTo(c1.x, c1.y); ctx.lineTo(c2.x, c2.y); ctx.stroke();
+      ctx.beginPath(); ctx.arc(c1.x, c1.y, 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(c2.x, c2.y, 3, 0, Math.PI*2); ctx.fill();
+
+    } else if (d.type === 'ray') {
+      const [p1, p2] = d.pts;
+      const c1 = this._toCoord(p1.time, p1.price);
+      const c2 = this._toCoord(p2.time, p2.price);
+      if (c1.x == null || c2.x == null) return;
+      const dx = c2.x - c1.x, dy = c2.y - c1.y;
+      const scale = (Math.max(W, H) * 3) / (Math.sqrt(dx*dx + dy*dy) || 1);
+      ctx.beginPath(); ctx.moveTo(c1.x, c1.y); ctx.lineTo(c1.x + dx*scale, c1.y + dy*scale); ctx.stroke();
+      ctx.beginPath(); ctx.arc(c1.x, c1.y, 3, 0, Math.PI*2); ctx.fill();
+
+    } else if (d.type === 'rect') {
+      const [p1, p2] = d.pts;
+      const c1 = this._toCoord(p1.time, p1.price);
+      const c2 = this._toCoord(p2.time, p2.price);
+      if (c1.x == null || c2.x == null) return;
+      const rx = Math.min(c1.x, c2.x), ry = Math.min(c1.y, c2.y);
+      const rw = Math.abs(c2.x - c1.x),  rh = Math.abs(c2.y - c1.y);
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = prevAlpha * 0.15;
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.globalAlpha = prevAlpha;
+      ctx.strokeRect(rx, ry, rw, rh);
+
+    } else if (d.type === 'fib') {
+      const [p1, p2] = d.pts;
+      const c1 = this._toCoord(p1.time, p1.price);
+      const c2 = this._toCoord(p2.time, p2.price);
+      if (c1.x == null || c2.x == null) return;
+      const levels  = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+      const colors  = ['#ef4444','#f59e0b','#22c55e','#06b6d4','#3b82f6','#a855f7','#ef4444'];
+      const xL = Math.min(c1.x, c2.x);
+      levels.forEach((lvl, i) => {
+        const price = p1.price + (p2.price - p1.price) * lvl;
+        const { y } = this._toCoord(p1.time, price);
+        if (y == null) return;
+        ctx.strokeStyle = colors[i];
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(xL, y); ctx.lineTo(W, y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = colors[i];
+        ctx.fillText(`${(lvl*100).toFixed(1)}%  ${price.toFixed(2)}`, W - 88, y - 2);
+      });
+    }
+  },
+
+  // Apply timezone to chart axis labels and crosshair
+  applyTz(tz) {
+    if (!this.chart) return;
+    this.tz = tz;
+    const TMT = LightweightCharts.TickMarkType;
+    const _fmt = (t, opts) => {
+      if (typeof t === 'object') {
+        // BusinessDay {year, month, day}
+        return `${t.month}/${t.day}/${t.year}`;
+      }
+      return new Date(t * 1000).toLocaleString('en-US', { timeZone: tz, ...opts });
+    };
+    this.chart.applyOptions({
+      localization: {
+        // crosshair & tooltip time label
+        timeFormatter: (t) => _fmt(t, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }),
+      },
+      timeScale: {
+        tickMarkFormatter: (t, type) => {
+          if (typeof t === 'object') return _fmt(t, {});
+          if (type === TMT.Year)       return _fmt(t, { year:  'numeric' });
+          if (type === TMT.Month)      return _fmt(t, { month: 'short', year: '2-digit' });
+          if (type === TMT.DayOfMonth) return _fmt(t, { month: 'short', day: 'numeric' });
+          // Time / TimeWithSeconds
+          return _fmt(t, { hour: '2-digit', minute: '2-digit', hour12: false });
+        },
+      },
+    });
+  },
+
+  // Called on every price tick — updates the live (current) bar like MT5
+  tickCandle(price, tfSec) {
+    if (!this.candle || !this._lastBar || !(price > 0)) return;
+    const barTime = Math.floor(Date.now() / 1000 / tfSec) * tfSec;
+    if (barTime > this._lastBar.time) {
+      // New bar opened — open at previous close
+      this._lastBar = { time: barTime, open: this._lastBar.close, high: price, low: price, close: price };
+    } else {
+      // Same bar — update close, extend high/low
+      this._lastBar.close = price;
+      if (price > this._lastBar.high) this._lastBar.high = price;
+      if (price < this._lastBar.low)  this._lastBar.low  = price;
+    }
+    try { this.candle.update(this._lastBar); } catch(e) {}
+  },
+
+  _ema(c,cl,p){ const r=[],k=2/(p+1); let e=cl.slice(0,p).reduce((a,b)=>a+b,0)/p;
+    for(let i=p;i<cl.length;i++){e=cl[i]*k+e*(1-k);r.push({time:c[i].time,value:Math.round(e*100)/100});}return r; },
+  _bb(c,p,s){ const r=[],cl=c.map(x=>x.close);
+    for(let i=p-1;i<cl.length;i++){const sl=cl.slice(i-p+1,i+1),m=sl.reduce((a,b)=>a+b,0)/p,sd=Math.sqrt(sl.reduce((a,b)=>a+(b-m)**2,0)/p);
+    r.push({time:c[i].time,u:m+s*sd,l:m-s*sd});}return r; },
+};
+
+// ══ Alpine App ════════════════════════════════════════════════════════════════
+function app(){
+  return {
+    wsConnected:false, price:{price:null,change:0,change_pct:0,source:''},
+    vix:0, analysis:{}, patterns:{}, newsAnalysis:{}, news:[], signals:[],
+    learner:{total_signals:0,total_resolved:0,overall_win_rate:null,recent_pnl_pts:0,setup_stats:{}},
+    analyzing:false, tab:'signals', tf:'5m', lastUpdate:'', chartMsg:'',
+    _tick:0, // incremented every 30s to force sessionSchedule recomputation
+    activeTool:'cursor',
+    tz:'UTC',
+    tzList:[
+      {label:'UTC',       value:'UTC'},
+      {label:'New York',  value:'America/New_York'},
+      {label:'Chicago',   value:'America/Chicago'},
+      {label:'London',    value:'Europe/London'},
+      {label:'Madrid',    value:'Europe/Madrid'},
+      {label:'Frankfurt', value:'Europe/Berlin'},
+      {label:'Dubai',     value:'Asia/Dubai'},
+      {label:'Tokyo',     value:'Asia/Tokyo'},
+      {label:'Sydney',    value:'Australia/Sydney'},
+    ],
+    inds:{vwap:false,ema9:false,ema21:false,ema50:false,bb:false,ob:false,fvg:false,poc:false,sr:false,bos:false,sweep:false},
+    sessions:{premarket:true,market:true,lunch:false,afterhours:false,night:false},
+    // Multi-TF signals (5m is primary — 1m removed, too noisy)
+    sig5m:[], sig1h:[],
+    // Per-panel show/hide (also controls chart lines)
+    showSig:{m5:true, h1:true},
+    // Regime / Session / Managed signals
+    regime:{}, session:{}, managedSignals:[], signalStats:{},
+
+    get smc(){ return this.analysis.smc||{}; },
+    get rsi(){ return this.analysis.indicators?.rsi||50; },
+    get sr(){ return this.analysis.support_resistance||{}; },
+    get revZones(){ return this.analysis.reversal_zones||[]; },
+    // Always show 5m signals in the bottom tab (1m removed — too noisy)
+    get currentSigs(){
+      if(this.tf==='1h') return this.sig1h;
+      return this.sig5m;  // 1m, 5m, 15m, 1d all show 5m signals
+    },
+    // Best single signal per array (highest confidence)
+    bestSig(arr){ return arr.slice().sort((a,b)=>(b.confidence||0)-(a.confidence||0)).slice(0,1); },
+
+    // ── Composite Institutional Prediction ─────────────────────────────────
+    get prediction(){
+      const a=this.analysis; if(!a||!a.indicators) return null;
+      const ind=a.indicators, smc=a.smc||{}, inst=a.institutional||{}, vwap=a.vwap||{};
+      const px=this.price.price||0, atr=ind.atr||50;
+      let bull=0, bear=0;
+      const factors=[];
+      const add=(name,dir,pts,icon)=>{
+        if(dir==='BULL') bull+=pts; else if(dir==='BEAR') bear+=pts;
+        if(pts>0) factors.push({name,dir,pts,icon});
+      };
+
+      // 1. EMA trend structure — w:20
+      const tr=a.trend||'';
+      if(tr.includes('STRONG_BULL')) add('EMA Trend','BULL',20,'↑↑');
+      else if(tr.includes('BULL')) add('EMA Trend','BULL',12,'↑');
+      else if(tr.includes('STRONG_BEAR')) add('EMA Trend','BEAR',20,'↓↓');
+      else if(tr.includes('BEAR')) add('EMA Trend','BEAR',12,'↓');
+
+      // 2. VWAP position (institutional benchmark) — w:10
+      if(vwap.position==='ABOVE') add('Above VWAP','BULL',10,'~');
+      else if(vwap.position==='BELOW') add('Below VWAP','BEAR',10,'~');
+
+      // 3. Volume Profile — price vs POC — w:10
+      const poc=inst.volume_profile?.poc, vah=inst.volume_profile?.vah, val=inst.volume_profile?.val;
+      if(poc){
+        if(px>vah+atr*0.2) add('Above VAH','BEAR',6,'VP'); // extended above value area
+        else if(px<val-atr*0.2) add('Below VAL','BULL',6,'VP'); // extended below value area
+        else if(px>poc+atr*0.3) add('Above POC','BULL',8,'VP');
+        else if(px<poc-atr*0.3) add('Below POC','BEAR',8,'VP');
+      }
+
+      // 4. Cumulative Delta (net institutional order flow) — w:16
+      const delta=inst.cum_delta||0;
+      if(delta>1000) add('Delta Surge','BULL',16,'D+');
+      else if(delta>300) add('Delta Bid','BULL',10,'D+');
+      else if(delta<-1000) add('Delta Flush','BEAR',16,'D-');
+      else if(delta<-300) add('Delta Ask','BEAR',10,'D-');
+
+      // 5. Order Blocks (unfilled institutional orders) — w:12
+      const obs=smc.order_blocks||[];
+      const bullOB=obs.find(o=>o.type==='BULLISH'&&px>=o.low-atr*0.3&&px<=o.high+atr*0.8);
+      const bearOB=obs.find(o=>o.type==='BEARISH'&&px<=o.high+atr*0.3&&px>=o.low-atr*0.8);
+      if(bullOB) add('Bull OB','BULL',12,'OB');
+      else if(bearOB) add('Bear OB','BEAR',12,'OB');
+
+      // 6. FVG magnetic pull (price tends to fill gaps) — w:8
+      const fvgs=smc.fair_value_gaps||[];
+      const upFVG=fvgs.find(f=>f.type==='BULLISH'&&f.low>px&&f.low<px+atr*4);
+      const dnFVG=fvgs.find(f=>f.type==='BEARISH'&&f.high<px&&f.high>px-atr*4);
+      if(upFVG) add('FVG Fill Up','BULL',8,'FV');
+      if(dnFVG) add('FVG Fill Dn','BEAR',8,'FV');
+
+      // 7. BOS / CHoCH (structure breaks & character changes) — w:10
+      const bos=smc.market_structure?.bos, choch=smc.market_structure?.choch;
+      if(bos?.type){
+        const bt=bos.type.toUpperCase();
+        if(bt.includes('BULL')||bt.includes('UP')) add('BOS Bull','BULL',10,'BS');
+        else if(bt.includes('BEAR')||bt.includes('DOWN')) add('BOS Bear','BEAR',10,'BS');
+      }
+      if(choch?.type){
+        const ct=choch.type.toUpperCase();
+        if(ct.includes('BULL')||ct.includes('UP')) add('CHoCH Bull','BULL',8,'CH');
+        else if(ct.includes('BEAR')||ct.includes('DOWN')) add('CHoCH Bear','BEAR',8,'CH');
+      }
+
+      // 8. RSI — overbought/oversold extremes + momentum — w:8
+      const rsi=ind.rsi||50;
+      if(rsi<30) add('RSI Oversold','BULL',8,'RS');
+      else if(rsi>70) add('RSI Overbought','BEAR',8,'RS');
+      else if(rsi>56&&rsi<70) add('RSI Bullish','BULL',5,'RS');
+      else if(rsi<44&&rsi>30) add('RSI Bearish','BEAR',5,'RS');
+
+      // 9. MACD histogram direction — w:8
+      const mh=ind.macd_hist||0;
+      if(mh>0) add('MACD Hist +','BULL',8,'MC');
+      else if(mh<0) add('MACD Hist -','BEAR',8,'MC');
+
+      // 10. Multi-TF confluence (all TFs agree = high conviction) — w:14
+      const m5t=(this.sig5m||[]).slice().sort((a,b)=>(b.confidence||0)-(a.confidence||0))[0];
+      const h1t=(this.sig1h||[]).slice().sort((a,b)=>(b.confidence||0)-(a.confidence||0))[0];
+      let tfDir=null,tfCount=0;
+      if(m5t){tfDir=m5t.direction;tfCount++;}
+      if(h1t&&h1t.direction===tfDir) tfCount++;
+      if(tfCount>=2){
+        const tPts=Math.round(((m5t?.confidence||60)+(h1t?.confidence||60))/14);
+        if(tfDir==='BUY') add('TF Confluence','BULL',tPts,'TF');
+        else add('TF Confluence','BEAR',tPts,'TF');
+      } else if(m5t){
+        if(tfDir==='BUY') add('5m Signal','BULL',6,'TF');
+        else add('5m Signal','BEAR',6,'TF');
+      }
+
+      // 11. AI News bias — w:12
+      const nw=this.newsAnalysis;
+      if(nw.direction_bias==='UP'&&(nw.direction_confidence||0)>=55)
+        add('AI News Bull','BULL',Math.min(12,Math.round((nw.direction_confidence||60)/8)),'AI');
+      else if(nw.direction_bias==='DOWN'&&(nw.direction_confidence||0)>=55)
+        add('AI News Bear','BEAR',Math.min(12,Math.round((nw.direction_confidence||60)/8)),'AI');
+
+      // 12. Historical pattern bias — w:6
+      const pb=this.patterns?.statistics?.bias||'';
+      const pwr=this.patterns?.statistics?.win_rate_long||50;
+      if(pb==='BULLISH'&&pwr>55) add('Pattern Bull','BULL',6,'PT');
+      else if(pb==='BEARISH'&&pwr<45) add('Pattern Bear','BEAR',6,'PT');
+
+      // 13. Regime + directional continuation — w:10
+      const rg=this.regime;
+      if(rg.regime){
+        const rm=rg.regime.toUpperCase();
+        const cp=rg.continuation_prob||50;
+        if((rm.includes('UP')||rm==='TRENDING_UP')&&cp>55) add('Regime Bull','BULL',Math.round(cp/12),'RG');
+        else if((rm.includes('DOWN')||rm==='TRENDING_DOWN')&&cp>55) add('Regime Bear','BEAR',Math.round(cp/12),'RG');
+        // Reversal regime shifts — high reversal prob means fade the trend
+        if(rg.reversal_prob>=65){
+          // fade current dominant move
+          if(bull>bear) add('Rev Risk','BEAR',5,'RV');
+          else add('Rev Risk','BULL',5,'RV');
+        }
+      }
+
+      // 14. Volume spike — confirms direction of last candle — w:6
+      const vr=ind.volume_ratio||1;
+      if(vr>2.0){
+        const last=(a.candles||[]).slice(-1)[0];
+        if(last&&last.close>last.open) add('Vol Spike Bull','BULL',6,'VS');
+        else if(last&&last.close<last.open) add('Vol Spike Bear','BEAR',6,'VS');
+      }
+
+      // 15. Stoch RSI signal — w:5
+      const sk=ind.stoch_k||50;
+      if(sk<20) add('Stoch OS','BULL',5,'ST');
+      else if(sk>80) add('Stoch OB','BEAR',5,'ST');
+
+      // ── Final score ──────────────────────────────────────────────────────
+      const total=bull+bear||1;
+      const bullPct=Math.round(bull/total*100);
+      const bearPct=100-bullPct;
+      const netPct=Math.round(Math.abs(bull-bear)/total*100);
+      let direction,confLabel,strength;
+      if(bullPct>=68){direction='BULLISH';confLabel=bullPct>=80?'STRONG BULL':'BULL BIAS';strength=bullPct>=80?3:2;}
+      else if(bearPct>=68){direction='BEARISH';confLabel=bearPct>=80?'STRONG BEAR':'BEAR BIAS';strength=bearPct>=80?3:2;}
+      else{direction='NEUTRAL';confLabel='RANGING';strength=1;}
+
+      // ── Price targets (institutional magnets) ─────────────────────────────
+      const targets=[];
+      if(vwap.value&&Math.abs(vwap.value-px)<atr*8)
+        targets.push({label:'VWAP',price:Math.round(vwap.value),dir:px<vwap.value?'UP':'DN',dist:Math.abs(Math.round(vwap.value-px))});
+      if(poc&&Math.abs(poc-px)<atr*10)
+        targets.push({label:'POC',price:Math.round(poc),dir:px<poc?'UP':'DN',dist:Math.abs(Math.round(poc-px))});
+      if(vah&&Math.abs(vah-px)<atr*8)
+        targets.push({label:'VAH',price:Math.round(vah),dir:px<vah?'UP':'DN',dist:Math.abs(Math.round(vah-px))});
+      if(val&&Math.abs(val-px)<atr*8)
+        targets.push({label:'VAL',price:Math.round(val),dir:px<val?'UP':'DN',dist:Math.abs(Math.round(val-px))});
+      // Nearest FVG fill
+      const sortedFVG=fvgs.filter(f=>Math.abs((f.high+f.low)/2-px)<atr*7)
+        .sort((x,y)=>Math.abs((x.high+x.low)/2-px)-Math.abs((y.high+y.low)/2-px));
+      if(sortedFVG[0]){const f=sortedFVG[0],mid=Math.round((f.high+f.low)/2);
+        targets.push({label:f.type==='BULLISH'?'Bull FVG':'Bear FVG',price:mid,dir:px<mid?'UP':'DN',dist:Math.abs(mid-Math.round(px))});}
+      // Nearest S&R
+      const srL=(a.support_resistance?.key_levels||[])
+        .filter(l=>Math.abs(l.price-px)>atr*0.2&&Math.abs(l.price-px)<atr*5)
+        .sort((x,y)=>Math.abs(x.price-px)-Math.abs(y.price-px));
+      if(srL[0]) targets.push({label:srL[0].label,price:Math.round(srL[0].price),dir:srL[0].price>px?'UP':'DN',dist:Math.abs(Math.round(srL[0].price-px))});
+
+      return{direction,confLabel,strength,bull,bear,bullPct,bearPct,netPct,total,
+        factors:factors.sort((x,y)=>y.pts-x.pts).slice(0,9),
+        targets:targets.sort((x,y)=>x.dist-y.dist).slice(0,5)};
+    },
+
+    drawTool(t){
+      this.activeTool = t;
+      CM.setTool(t);
+    },
+
+    init(){
+      // CM.init() is called from window 'load' event at the bottom of the script.
+      // Alpine's init() only handles data connections — no chart initialization here.
+      this.connectWs();
+      this.fetchAll();
+      setInterval(()=>{ if(!this.wsConnected) this.fetchPrice(); },5000);
+      setInterval(()=>{ this._tick++; },30000); // drives sessionSchedule countdown
+      // Esc → cursor, Ctrl+Z → undo
+      document.addEventListener('keydown', e => {
+        if(e.key==='Escape'){ this.drawTool('cursor'); }
+        if(e.ctrlKey && e.key==='z'){ CM.removeLastDrawing(); }
+      });
+    },
+
+    connectWs(){
+      const ws=new WebSocket('ws://localhost:8000/ws');
+      window._ws=ws;
+      ws.onopen=()=>this.wsConnected=true;
+      ws.onclose=()=>{ this.wsConnected=false; setTimeout(()=>this.connectWs(),3000); };
+      ws.onerror=()=>this.wsConnected=false;
+      ws.onmessage=e=>{ try{this.onMsg(JSON.parse(e.data));}catch(err){} };
+      clearInterval(window._ka);
+      window._ka=setInterval(()=>{ if(window._ws?.readyState===1) window._ws.send('ping'); },25000);
+    },
+
+    onMsg(m){
+      const d=m.data||{};
+      if(m.type==='price'){
+        this.price=d; this.lastUpdate=new Date().toLocaleTimeString();
+        // Live-update the current candle bar (tick-by-tick, like MT5)
+        const TF_SEC={'1m':60,'5m':300,'15m':900,'30m':1800,'1h':3600,'4h':14400,'1d':86400};
+        CM.tickCandle(d.price, TF_SEC[this.tf] || 300);
+      }
+      else if(m.type==='analysis'){
+        // Only update chart candles from WS if user is on 5m (backend broadcasts 5m analysis).
+        // Otherwise, only refresh indicators/signals/zones without touching the candle view.
+        if(d.analysis) this.setAnalysis(d.analysis, /*updateCandles=*/this.tf==='5m');
+        if(d.patterns) this.patterns=d.patterns;
+        this.lastUpdate=new Date().toLocaleTimeString();
+      }
+      else if(m.type==='multi_signals'){ this.applyMultiSignals(d.multi_signals); }
+      else if(m.type==='news'){ this.news=d.news||[]; this.newsAnalysis=d.ai_analysis||{}; }
+      else if(m.type==='learner_update'){ this.learner=d; }
+      else if(m.type==='signal_update'){ this.managedSignals=d.signals||[]; }
+      else if(m.type==='managed_signals'){ this.managedSignals=d.signals||[]; this.signalStats=d.stats||{}; }
+      else if(m.type==='connected'){
+        if(d.price) this.price=d.price;
+        if(d.analysis) this.setAnalysis(d.analysis, true);
+        if(d.patterns) this.patterns=d.patterns;
+        if(d.news) this.news=d.news;
+        if(d.news_analysis) this.newsAnalysis=d.news_analysis;
+        if(d.multi_signals) this.applyMultiSignals(d.multi_signals);
+        if(d.managed_signals) this.managedSignals=d.managed_signals;
+        if(d.signal_stats) this.signalStats=d.signal_stats;
+        if(d.regime) this.regime=d.regime;
+        if(d.session) this.session=d.session;
+        this.lastUpdate=new Date().toLocaleTimeString();
+      }
+    },
+
+    applyMultiSignals(multi){
+      if(!multi) return;
+      if(multi['5m']?.signals) this.sig5m=multi['5m'].signals;
+      if(multi['1h']?.signals) this.sig1h=multi['1h'].signals;
+      CM.drawSigLines(this.sig5m, this.sig1h);
+    },
+
+    setAnalysis(a, updateCandles=true){
+      if(!a)return;
+      this.analysis=a;
+      this.signals=a.signals||[];
+      if(a.regime) this.regime=a.regime;
+      if(a.session) this.session=a.session;
+      CM.inds=this.inds;
+      if(updateCandles) CM.update(a);
+      else {
+        // Only refresh overlays (VWAP, zones) — keep current candles
+        CM.setVwap(a.vwap?.series||[]);
+        CM.drawZones(a);
+      }
+      this.drawVolProfile(a);
+    },
+
+    async fetchAll(){
+      this.chartMsg='Connecting to backend...';
+      await this.fetchPrice();
+      this.chartMsg='Loading chart data...';
+      await this.fetchMarket();
+      // Fetch multi-TF signals and learner stats in background (non-blocking)
+      this.fetchMultiSignals();
+      this.fetchLearner();
+      this.fetchManagedSignals();
+    },
+
+    async fetchManagedSignals(){
+      try{
+        const r=await fetch('http://localhost:8000/api/signals/active');
+        if(r.ok){ const d=await r.json(); this.managedSignals=d.signals||[]; this.signalStats=d.stats||{}; }
+      }catch(e){}
+    },
+
+    async fetchLearner(){
+      try{
+        const r=await fetch('http://localhost:8000/api/learner');
+        if(r.ok){ const d=await r.json(); this.learner=d.stats||this.learner; }
+      }catch(e){}
+    },
+
+    async fetchMultiSignals(){
+      try{
+        const r=await fetch('http://localhost:8000/api/signals_multi');
+        if(r.ok){ const d=await r.json(); this.applyMultiSignals(d); }
+      }catch(e){}
+    },
+
+    toggleSig(tf){
+      this.showSig[tf]=!this.showSig[tf];
+      CM.showSig[tf]=this.showSig[tf];
+      // Redraw lines for this TF only (pass null for the others to skip them)
+      CM.drawSigLines(
+        tf==='m5'?this.sig5m:null,
+        tf==='h1'?this.sig1h:null,
+      );
+    },
+
+    async fetchPrice(){
+      try{ const r=await fetch('http://localhost:8000/api/price'); if(r.ok){const d=await r.json();this.price=d;if(d.vix)this.vix=d.vix;} }catch(e){}
+    },
+
+    async fetchMarket(){
+      try{
+        const r=await fetch('http://localhost:8000/api/market');
+        if(!r.ok){ this.chartMsg='Backend error — restart server'; return; }
+        const d=await r.json();
+        if(d.price)this.price=d.price;
+        if(d.vix)this.vix=d.vix;
+        if(d.analysis)this.setAnalysis(d.analysis, true);
+        this.lastUpdate=new Date().toLocaleTimeString();
+        this.chartMsg = CM.count > 0 ? '' : 'No candle data received from backend';
+      }catch(e){ this.chartMsg='Cannot reach backend — run: python start.py'; }
+    },
+
+    async runAnalysis(){
+      this.analyzing=true;
+      try{
+        const r=await fetch('http://localhost:8000/api/analyze',{method:'POST'});
+        const d=await r.json();
+        if(d.analysis)this.setAnalysis(d.analysis, this.tf==='5m');
+        if(d.patterns)this.patterns=d.patterns;
+        if(d.news_analysis)this.newsAnalysis=d.news_analysis;
+        if(d.news)this.news=d.news;
+        this.lastUpdate=new Date().toLocaleTimeString();
+        // Fetch multi-signals after full analyze (backend recomputes them too)
+        this.fetchMultiSignals();
+      }catch(e){}
+      this.analyzing=false;
+    },
+
+    async changeTf(){
+      // Switch bottom panel to show signals for the new TF immediately
+      this.tab='signals';
+      // Clear overlays so stale data doesn't linger
+      CM.setVwap([]);
+      try{ CM.delta?.setData([]); }catch(e){}
+      this.chartMsg='Loading '+this.tf+'...';
+      try{
+        const r=await fetch(`http://localhost:8000/api/candles?interval=${this.tf}&bars=300`);
+        const d=await r.json();
+        if(d.candles?.length){ CM.inds=this.inds; CM.setCandles(d.candles); this.chartMsg=''; }
+        else this.chartMsg='No data for '+this.tf;
+      }catch(e){ this.chartMsg='Error loading '+this.tf; }
+    },
+
+    toggleInd(name){
+      this.inds[name]=!this.inds[name];
+      CM.inds=this.inds;
+      // Re-render only what changed
+      if(name==='vwap') CM.setVwap(this.inds.vwap?(this.analysis.vwap?.series||[]):[]);
+      else if(['ema9','ema21','ema50','bb'].includes(name)){
+        if(this.analysis.candles?.length) CM.setCandles(this.analysis.candles);
+      }
+      else if(['ob','fvg','poc','sr','bos','sweep'].includes(name)) CM.drawZones(this.analysis);
+    },
+
+    toggleSession(name){
+      this.sessions[name]=!this.sessions[name];
+      CM.sessions[name]=this.sessions[name];
+      CM.drawSessions();
+    },
+
+    drawVolProfile(analysis){
+      const profile=analysis.institutional?.volume_profile?.profile||[];
+      const canvas=document.getElementById('vol-canvas');
+      if(!canvas||!profile.length)return;
+      const dpr=window.devicePixelRatio||1;
+      canvas.width=canvas.offsetWidth*dpr; canvas.height=canvas.offsetHeight*dpr;
+      const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+      const w=canvas.offsetWidth,h=canvas.offsetHeight;
+      ctx.clearRect(0,0,w,h);
+      const maxV=Math.max(...profile.map(p=>p.volume),1);
+      const poc=analysis.institutional?.volume_profile?.poc;
+      const vah=analysis.institutional?.volume_profile?.vah;
+      const val=analysis.institutional?.volume_profile?.val;
+      const prices=profile.map(p=>p.price);
+      const minP=Math.min(...prices),maxP=Math.max(...prices),rng=maxP-minP||1;
+      const bh=Math.max(h/profile.length,2);
+      profile.forEach(bar=>{
+        const bw=(bar.volume/maxV)*(w*0.82);
+        const y=h-((bar.price-minP)/rng)*h;
+        const isPoc=Math.abs(bar.price-(poc||0))<rng/profile.length;
+        const isVA=val!=null&&vah!=null&&bar.price>=val&&bar.price<=vah;
+        ctx.fillStyle=isPoc?'#f59e0b':isVA?'#1e3a5f':'#1a2235';
+        ctx.fillRect(0,y-bh/2,bw,bh);
+      });
+      if(poc){
+        const y=h-((poc-minP)/rng)*h;
+        ctx.strokeStyle='#f59e0b';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();ctx.setLineDash([]);
+      }
+      const cp=this.price.price;
+      if(cp&&cp>=minP&&cp<=maxP){
+        const y=h-((cp-minP)/rng)*h;
+        ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.setLineDash([2,3]);
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();ctx.setLineDash([]);
+      }
+    },
+
+    sigStatus(sig){
+      if(!this.price.price) return 'Monitoring...';
+      const dist=Math.abs(this.price.price-sig.entry);
+      const atr=sig.atr||50;
+      if(dist<atr*0.3) return '🔔 NEAR ENTRY — Ready to execute';
+      if(sig.direction==='BUY'&&this.price.price<sig.entry) return 'Waiting for bounce to '+sig.entry.toFixed(1);
+      if(sig.direction==='BUY'&&this.price.price>sig.entry) return 'Waiting for pullback to '+sig.entry.toFixed(1);
+      if(sig.direction==='SELL'&&this.price.price>sig.entry) return 'Waiting for drop to '+sig.entry.toFixed(1);
+      if(sig.direction==='SELL'&&this.price.price<sig.entry) return 'Waiting for rally to '+sig.entry.toFixed(1);
+      return 'Monitoring...';
+    },
+    trendBadge(t){if(!t)return'bx';if(t.includes('STRONG_BULL'))return'bg';if(t.includes('BULL'))return'bg';if(t.includes('STRONG_BEAR'))return'br';if(t.includes('BEAR'))return'br';return'by';},
+    aiBadge(l){if(!l)return'bx';if(l.includes('BULL'))return'bg';if(l.includes('BEAR'))return'br';return'by';},
+    regimeBadge(r){if(!r)return'bx';if(r.includes('UP')||r.includes('TREND'))return'bg';if(r.includes('DOWN'))return'br';if(r.includes('REVERSAL'))return'bp';if(r.includes('CONSOLIDATION'))return'bx';return'by';},
+    sessionBadge(s){if(!s)return'bx';if(['OPEN','POWER_HOUR'].includes(s))return'bg';if(s==='LUNCH')return'bx';if(s==='PRE_MARKET')return'by';return'bb';},
+    confColor(c){return c>=70?'#22c55e':c>=50?'#f59e0b':'#ef4444';},
+    winRemain(s){ const tot=s.window_remaining_s||0; return Math.floor(tot/60)+'m '+(tot%60)+'s'; },
+    smcContextForSig(sig){
+      // Find nearest OB, FVG and reversal zone overlapping entry
+      const atr=sig.atr||50, entry=sig.entry||0;
+      const obs=(this.smc.order_blocks||[]).filter(o=>Math.abs((o.high+o.low)/2-entry)<atr*1.2);
+      const fvgs=(this.smc.fair_value_gaps||[]).filter(f=>Math.abs((f.high+f.low)/2-entry)<atr*1.2);
+      const rz=(this.revZones||[]).find(z=>Math.abs(z.price-entry)<atr*0.6);
+      const nsr=sig.nearest_support||sig.nearest_resistance||null;
+      return {ob:obs[0]||null, fvg:fvgs[0]||null, revZone:rz||null, nsr};
+    },
+
+    etTime(){
+      try{return new Date().toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:false})+' ET';}catch(e){return'—';}
+    },
+
+    // ── Global Session Schedule with Directional Prediction ────────────────
+    get sessionSchedule(){
+      void this._tick; // reactive dependency — re-evaluates every 30s
+      if(!this.analysis?.indicators) return [];
+      const now=new Date();
+      const utcMins=now.getUTCHours()*60+now.getUTCMinutes();
+      const a=this.analysis, ind=a.indicators||{}, smc=a.smc||{};
+      const inst=a.institutional||{}, vwap=a.vwap||{};
+      const px=this.price.price||0, atr=ind.atr||50;
+      const tr=(a.trend||'').toUpperCase();
+      const isBull=tr.includes('BULL'), isBear=tr.includes('BEAR');
+      const delta=inst.cum_delta||0, rsi=ind.rsi||50;
+      const poc=inst.volume_profile?.poc||0;
+      const vwapPos=vwap.position||'';
+      const fvgs=smc.fair_value_gaps||[];
+      const obs=smc.order_blocks||[];
+      const revProb=this.regime?.reversal_prob||0;
+
+      // ── Helpers ──────────────────────────────────────────────────────────
+      // Is utcMins inside a session window (handles midnight crossover)
+      const inW=(o,c)=>{ if(o<c) return utcMins>=o&&utcMins<c; return utcMins>=o||utcMins<c; };
+      // Minutes until target UTC minute mark
+      const mTo=(t)=>{ let d=t-utcMins; if(d<0) d+=1440; return d; };
+      // Minutes since open (when currently inside session)
+      const mSince=(o)=>{ let d=utcMins-o; if(d<0) d+=1440; return d; };
+      // Human-readable countdown
+      const fcd=(m)=>m<60?(m+'m'):(Math.floor(m/60)+'h'+(m%60?' '+(m%60)+'m':''));
+
+      // ── Per-session directional bias ──────────────────────────────────────
+      // Encodes institutional behavioral patterns at each open
+      const getBias=(id)=>{
+        const nBullOB=obs.some(o=>o.type==='BULLISH'&&px>=o.low-atr&&px<=o.high+atr);
+        const nBearOB=obs.some(o=>o.type==='BEARISH'&&px<=o.high+atr&&px>=o.low-atr);
+        const nUpFVG=fvgs.some(f=>f.type==='BULLISH'&&f.low>px&&f.low<px+atr*4);
+        const nDnFVG=fvgs.some(f=>f.type==='BEARISH'&&f.high<px&&f.high>px-atr*4);
+
+        if(id==='Sydney'){
+          // Very low NAS100 impact — just tracks US futures direction
+          return{dir:isBull?'BULL':isBear?'BEAR':'NEUTRAL',conf:50,
+            pattern:'US Futures Follow',
+            note:'Overnight futures continuation. Very low NAS100 impact.'};
+        }
+        if(id==='Tokyo'){
+          // Tokyo: NAS100 mostly tracks US futures, low vol
+          // If delta is strong, Asian buyers can push further
+          const conf=Math.abs(delta)>600?56:50;
+          return{dir:isBull?'BULL':isBear?'BEAR':'NEUTRAL',conf,
+            pattern:'Asian Range Formation',
+            note:'Defines overnight range. Price tends to consolidate or drift with US futures.'};
+        }
+        if(id==='HK'){
+          // Hong Kong: tech sector correlation, some NAS100 impact
+          const conf=Math.abs(delta)>500?58:52;
+          return{dir:isBull?'BULL':isBear?'BEAR':'NEUTRAL',conf,
+            pattern:'Asia Tech Sentiment',
+            note:'Hang Seng tech correlation. Elevated vol if major HK news.'};
+        }
+        if(id==='Frankfurt'){
+          // Frankfurt: precedes London, European risk gauge
+          const conf=Math.abs(delta)>400?60:54;
+          return{dir:isBull?'BULL':isBear?'BEAR':'NEUTRAL',conf,
+            pattern:'EU Risk Appetite',
+            note:'Precedes London open by ~1h. Watch EUR/USD for risk-on signal.'};
+        }
+        if(id==='London'){
+          // London open: #1 volatility event before NY
+          // Classic pattern: SWEEPS Asian range lows/highs → then drives in trend direction
+          // 60-70% probability of stop hunt before real move
+          if(isBull&&(vwapPos==='ABOVE'||delta>300))
+            return{dir:'BULL',conf:67,pattern:'Stop Hunt then LONG',
+              note:'Expect sweep of overnight lows to grab stops, then UP. Wait for reversal candle.'};
+          if(isBear&&(vwapPos==='BELOW'||delta<-300))
+            return{dir:'BEAR',conf:67,pattern:'Stop Hunt then SHORT',
+              note:'Expect sweep of overnight highs to grab stops, then DOWN. Wait for rejection.'};
+          if(nBullOB&&isBull)
+            return{dir:'BULL',conf:63,pattern:'Bull OB Defense',
+              note:'Bullish OB nearby. London algo likely defends institutional buy zone.'};
+          if(nBearOB&&isBear)
+            return{dir:'BEAR',conf:63,pattern:'Bear OB Rejection',
+              note:'Bearish OB overhead. London algo likely rejects here before drop.'};
+          if(delta>500) return{dir:'BULL',conf:62,pattern:'Delta Continuation',note:'Strong buy delta entering London. Continuation expected.'};
+          if(delta<-500) return{dir:'BEAR',conf:62,pattern:'Delta Continuation',note:'Strong sell delta entering London. Continuation expected.'};
+          return{dir:'NEUTRAL',conf:48,pattern:'Wait for Open Candle',
+            note:'Mixed signals. Watch the first London 15m candle for direction.'};
+        }
+        if(id==='NY Pre'){
+          // 4:00-9:30 AM ET: institutions position, gaps form
+          const rsiE=rsi>68?'OB':rsi<32?'OS':null;
+          if(isBull&&!rsiE&&delta>200&&vwapPos==='ABOVE')
+            return{dir:'BULL',conf:72,pattern:'Gap & Go UP',
+              note:'All aligned: trend+delta+VWAP bullish. Institutions positioning long before open.'};
+          if(isBear&&!rsiE&&delta<-200&&vwapPos==='BELOW')
+            return{dir:'BEAR',conf:72,pattern:'Gap & Go DOWN',
+              note:'All aligned: trend+delta+VWAP bearish. Institutions positioning short before open.'};
+          if(rsiE==='OB')
+            return{dir:'BEAR',conf:58,pattern:'Pre-Mkt Fade Risk',
+              note:'RSI overbought entering pre-market. Fade opportunity possible. Wait for confirmation.'};
+          if(rsiE==='OS')
+            return{dir:'BULL',conf:58,pattern:'Oversold Pre-Mkt Bounce',
+              note:'RSI oversold. Pre-market buyers likely step in. Watch for reversal candle.'};
+          if(nUpFVG&&isBull) return{dir:'BULL',conf:60,pattern:'FVG Magnet UP',note:'Unfilled bull FVG above price. Pre-market likely drawn up.'};
+          if(nDnFVG&&isBear) return{dir:'BEAR',conf:60,pattern:'FVG Magnet DOWN',note:'Unfilled bear FVG below price. Pre-market likely drawn down.'};
+          return{dir:'NEUTRAL',conf:52,pattern:'Range Play',
+            note:'Mixed signals. Watch overnight high/low and gap vs prior close.'};
+        }
+        if(id==='NY'){
+          // 9:30 AM ET: maximum volatility, highest conviction
+          // Classic: opening spike to sweep stops, then REAL direction drive
+          if(isBull&&delta>400&&vwapPos==='ABOVE')
+            return{dir:'BULL',conf:79,pattern:'Open Drive UP',
+              note:'Maximum conviction: trend+delta+VWAP aligned BULL. Expect fast opening drive up.'};
+          if(isBear&&delta<-400&&vwapPos==='BELOW')
+            return{dir:'BEAR',conf:79,pattern:'Open Drive DOWN',
+              note:'Maximum conviction: trend+delta+VWAP aligned BEAR. Expect fast opening drive down.'};
+          if(nUpFVG&&isBull)
+            return{dir:'BULL',conf:67,pattern:'FVG Fill UP',
+              note:'Unmitigated bull FVG above. NY open typically fills gaps within first 30-60 min.'};
+          if(nDnFVG&&isBear)
+            return{dir:'BEAR',conf:67,pattern:'FVG Fill DOWN',
+              note:'Unmitigated bear FVG below. NY open typically fills gaps within first 30-60 min.'};
+          if(poc&&Math.abs(px-poc)<atr*0.6)
+            return{dir:'NEUTRAL',conf:50,pattern:'POC Battle Zone',
+              note:'Price at POC. High vol institutions buying/selling here. Wait for breakout direction.'};
+          if(revProb>=65)
+            return{dir:isBull?'BEAR':'BULL',conf:60,pattern:'Reversal Open',
+              note:'High reversal probability. NY open may trap latecomers then reverse.'};
+          if(isBull) return{dir:'BULL',conf:64,pattern:'Bullish Opening Range',note:'Bullish bias. Watch first 5-15m candle — break of opening range high = long.'};
+          if(isBear) return{dir:'BEAR',conf:64,pattern:'Bearish Opening Range',note:'Bearish bias. Watch first 5-15m candle — break of opening range low = short.'};
+          return{dir:'NEUTRAL',conf:50,pattern:'Opening Range Play',
+            note:'Wait for 5-15 min opening range to establish, then trade the break.'};
+        }
+        if(id==='LDN Close'){
+          // ~11:30 AM ET: European desks close books → liquidity shift
+          if(revProb>=60)
+            return{dir:isBull?'BEAR':'BULL',conf:62,pattern:'London Close Reversal',
+              note:'High rev% + European desks closing. Fade the morning trend frequently works.'};
+          return{dir:'NEUTRAL',conf:50,pattern:'Liquidity Shift',
+            note:'European desks close. Can cause reversal or consolidation before NY afternoon.'};
+        }
+        if(id==='NY Power'){
+          // 3:00-4:00 PM ET: institutional EOD rebalancing
+          if(isBull&&delta>200)
+            return{dir:'BULL',conf:66,pattern:'Power Hour Bull',
+              note:'Funds rebalancing bullish into close. Strong momentum continuation likely.'};
+          if(isBear&&delta<-200)
+            return{dir:'BEAR',conf:66,pattern:'Power Hour Bear',
+              note:'Funds rebalancing bearish into close. Final leg down possible.'};
+          return{dir:'NEUTRAL',conf:52,pattern:'EOD Rebalance',
+            note:'Watch for vol spike. Institutions closing/hedging positions — can reverse intraday trend.'};
+        }
+        return{dir:'NEUTRAL',conf:50,pattern:'',note:''};
+      };
+
+      // ── Session definitions (UTC minutes, approximate EDT/GMT window) ─────
+      // Times use summer hours (EDT=UTC-4, BST=UTC+1, CEST=UTC+2) — most of trading year
+      const SL=[
+        {id:'Sydney',   lbl:'Sydney ASX',   o:23*60,    c:5*60+30, clr:'#94a3b8',imp:'LOW',    tz:'AEDT'},
+        {id:'Tokyo',    lbl:'Tokyo TSE',    o:0,        c:6*60,    clr:'#f59e0b',imp:'MED',    tz:'JST'},
+        {id:'HK',       lbl:'Hong Kong',    o:1*60+30,  c:8*60,    clr:'#ef4444',imp:'MED',    tz:'HKT'},
+        {id:'Frankfurt',lbl:'Frankfurt',    o:7*60,     c:15*60+30,clr:'#3b82f6',imp:'MED',    tz:'CET'},
+        {id:'London',   lbl:'London LSE',   o:8*60,     c:16*60+30,clr:'#a855f7',imp:'HIGH',   tz:'BST'},
+        {id:'NY Pre',   lbl:'NY Pre-Mkt',   o:8*60,     c:13*60+30,clr:'#06b6d4',imp:'HIGH',   tz:'ET'},
+        {id:'NY',       lbl:'New York',     o:13*60+30, c:20*60,   clr:'#22c55e',imp:'EXTREME',tz:'ET'},
+        {id:'LDN Close',lbl:'London Close', o:15*60,    c:16*60+30,clr:'#ef4444',imp:'HIGH',   tz:'BST'},
+        {id:'NY Power', lbl:'Power Hour',   o:19*60,    c:20*60,   clr:'#f97316',imp:'HIGH',   tz:'ET'},
+      ];
+
+      return SL.map(s=>{
+        const open=inW(s.o,s.c);
+        const mOpen=mTo(s.o);           // mins until next open
+        const mClose=mTo(s.c);          // mins until next close
+        const sinceOpen=open?mSince(s.o):0;
+        const justOpened=open&&sinceOpen<=30;
+        const openingSoon=!open&&mOpen<=45;
+        const closingSoon=open&&mClose<=25;
+        const bias=getBias(s.id);
+
+        let status;
+        if(justOpened) status='JUST OPENED';
+        else if(open&&closingSoon) status='CLOSING';
+        else if(open) status='OPEN';
+        else if(openingSoon) status='OPENING';
+        else status='CLOSED';
+
+        const timeInfo=open
+          ?(closingSoon?'Closes in '+fcd(mClose):'Closes in '+fcd(mClose))
+          :(openingSoon?'Opens in '+fcd(mOpen):'Opens in '+fcd(mOpen));
+
+        return{...s,open,status,timeInfo,mOpen,mClose,sinceOpen,justOpened,openingSoon,closingSoon,bias};
+      });
+    },
+
+  };
+}
+
+// ══ Guaranteed chart init — fires after ALL resources loaded + layout computed ══
+window.addEventListener('load', function() {
+  console.log('[CM] window load fired — initializing chart');
+  CM.init();
+});
+</script>
+</body>
+</html>

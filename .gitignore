@@ -1,0 +1,28 @@
+# Secrets — NEVER commit
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE / local config
+.vscode/
+.claude/
+*.local.json
+
+# Trading data / personal memory
+backend/adaptive_memory.json
+backend/signal_history.json
+backend/*.db
+
+# OS
+.DS_Store
+Thumbs.db
